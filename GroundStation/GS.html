@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DhumketuX Engine Test System</title>
+    <link rel="stylesheet" href="style.css"> 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
+</head>
+<body>
+    <header>
+        <div class="logo-placeholder">
+            <img src="dhumketux_logo.png" alt="DhumketuX Logo" width="150">
+        </div>
+    </header>
+
+    <main class="dashboard-grid">
+        <div class="panel webcam-panel">
+            <h3>Live Feed</h3>
+            <video id="webcam-feed" autoplay></video>
+            <p id="status-display">STATUS: DISCONNECTED</p>
+        </div>
+
+        <div class="panel graph-panel">
+            <div class="graph-header">
+                <h3>Thrust Data (Newtons)</h3>
+                <button id="saveDataBtn">💾 Save Data (CSV)</button>
+            </div>
+            <canvas id="thrustChart"></canvas>
+        </div>
+    </main>
+
+    <div class="control-panel">
+        <button id="connectBtn" class="primary-btn">🔌 Connect to Arduino</button>
+        <button id="launchBtn" class="action-btn launch-btn" disabled>🚀 Launch (30s Countdown)</button>
+        <button id="testBtn" class="action-btn test-btn" disabled>🔥 Test (Direct Fire)</button>
+        <div id="countdown-timer" class="timer-display">ARMED</div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
