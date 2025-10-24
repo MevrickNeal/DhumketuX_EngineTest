@@ -1,22 +1,27 @@
-// --- Libraries ---
+// DhumketuX Engine Test System - Launch Pad Unit (LP)
+// Role: Reads sensors, executes commands, and transmits FIXED structured telemetry.
+// Required Libraries: HX711, SoftwareSerial, DHT, Adafruit_Sensor, Servo, LoRa_E32 (Renzo Mischianti)
+
 #include "HX711.h"
 #include <SoftwareSerial.h>
 #include <DHT.h>       
 #include <Adafruit_Sensor.h> 
 #include <Servo.h>     
-#include "LoRa_E32.h" // <<< UPDATED: Use the correct header file you found
+#include "LoRa_E32.h" 
 
 // --- PIN DEFINITIONS ---
 // LoRa Control Pins
 #define PIN_M0 8    
 #define PIN_M1 9    
+#define PIN_AUX 7 
 const int LORA_RX_PIN = 10; 
 const int LORA_TX_PIN = 11; 
 const long LORA_BAUD = 9600; 
 
 SoftwareSerial LoRaSerial(LORA_RX_PIN, LORA_TX_PIN); 
-// We must assume the class name used in the library is 'LoRa_E32' based on the header file name.
-LoRa_E32 Transceiver(&LoRaSerial, PIN_M0, PIN_M1); // <<< UPDATED: Using the SoftwareSerial pointer constructor
+
+// FIX: Constructor requires the AUX pin, M0, and M1 pins when passing SoftwareSerial pointer
+LoRa_E32 Transceiver(&LoRaSerial, PIN_AUX, PIN_M0, PIN_M1); 
 
 // Load Cell, DHT22, Control Pins (Unchanged)
 const int LOADCELL_DOUT_PIN = 3; 
@@ -36,6 +41,21 @@ float currentTemp_C = 0.0;
 float currentHumi_RH = 0.0;
 bool isArmed = false;
 
+// --- FIXED TRANSMISSION: STRUCTURED DATA DEFINITION ---
+struct Telemetry_t {
+    float thrust;
+    float temperature;
+    float humidity;
+    bool isArmedStatus;
+} currentTelemetry;
+
+// --- ADDRESSING ---
+const byte LP_ADDR_H = 0x00; 
+const byte LP_ADDR_L = 0x00; 
+const byte GS_ADDR_H = 0x00; 
+const byte GS_ADDR_L = 0x01; 
+const byte LORA_CHANNEL = 0x02; 
+
 // --- FUNCTION PROTOTYPES ---
 void executeCommand(char cmd);
 void setSafePosition();
@@ -47,22 +67,51 @@ void transmitTelemetry();
 void setup() {
   Serial.begin(9600);
   
-  // 1. Initialize E32 Transceiver and Set Mode
+  // Initialize LoRa E32 Pins
+  pinMode(PIN_M0, OUTPUT);
+  pinMode(PIN_M1, OUTPUT);
+  pinMode(PIN_AUX, INPUT);
+  
+  // 1. Initialize E32 Transceiver
   LoRaSerial.begin(LORA_BAUD);
   
-  // NOTE: Initialization method may differ slightly. We use the most common one.
-  ResponseStatus rs = Transceiver.begin(); 
-  Serial.print("LoRa Initialization Status: ");
+  // FIX: Use Transceiver.begin() for initialization only (returns void or bool)
+  Transceiver.begin(); 
+  Serial.println("LoRa Transceiver Initialized.");
+
+
+  // --- CONFIGURATION FOR FIXED TRANSMISSION ---
+  ResponseStatus rs; 
+  Configuration config;
+  
+  // Retrieve current configuration (or use defaults)
+  ResponseStructContainer c = Transceiver.getConfiguration();
+  if (c.status.code == E32_SUCCESS) {
+    config = *(Configuration*)c.data;
+  } 
+  
+  // Explicitly set the desired parameters using raw binary/hex values (FINAL FIX)
+  // Air Data Rate: 2.4 kbps (0b010)
+  config.SPED.airDataRate = 0b010; 
+  // Transmission Power: 17 dBm (0b01)
+  config.OPTION.transmissionPower = 0b01; 
+  // UART Parity: 8N1 (0b00)
+  config.SPED.uartParity = 0b00; 
+  
+  // Set Fixed Transmission Mode and Addressing
+  config.OPTION.fixedTransmission = FT_FIXED_TRANSMISSION; 
+  config.ADDH = LP_ADDR_H; // Set module's own high address
+  config.ADDL = LP_ADDR_L; // Set module's own low address
+  config.CHAN = LORA_CHANNEL;
+
+  
+  // Save configuration permanently (0xC0 is the raw command for permanent save)
+  rs = Transceiver.setConfiguration(config, 0xC0); // WRITE_CFG_PWR_DWN_SAVE
+
+  Serial.print("LoRa Config Set Status: ");
   Serial.println(rs.getResponseDescription());
+  // --- END CONFIGURATION ---
   
-  // Set consistent, reliable air data rate for both modules (2.4 kbps)
-  Transceiver.setAirDataRate(ADR_2400); 
-  
-  // Set Transmit Power 
-  Transceiver.setTransmissionPower(OPT_TP17); 
-  
-  // Set the E32 to Normal Mode (Mode 0) for communication
-  Transceiver.setMode(MODE_0_NORMAL); 
 
   // 2. Initialize Controls (D13 Relay, D5 Servo)
   pinMode(RELAY_PIN, OUTPUT);
@@ -76,7 +125,7 @@ void setup() {
   scale.tare(); 
   dht.begin(); 
   
-  Serial.println("Launch Pad Ready (LoRa Configured).");
+  Serial.println("Launch Pad Ready (Fixed TX Mode).");
 }
 
 void loop() {
@@ -163,13 +212,30 @@ void readSensors() {
       currentThrust_N = 0.0;
     }
   }
+  
+  // Populate the structured message
+  currentTelemetry.thrust = currentThrust_N;
+  currentTelemetry.temperature = currentTemp_C;
+  currentTelemetry.humidity = currentHumi_RH;
+  currentTelemetry.isArmedStatus = isArmed;
 }
 
 void transmitTelemetry() {
-  String payload = "Thrust:" + String(currentThrust_N, 2) + 
-                   ",Temp:" + String(currentTemp_C, 1) + 
-                   ",Humi:" + String(currentHumi_RH, 1);
-  
-  // We use the underlying SoftwareSerial object for simple transparent transmission
-  LoRaSerial.println(payload);
+  // Transmit the structured message to the Ground Station's fixed address (0x0001)
+  ResponseStatus rs = Transceiver.sendFixedMessage(
+    GS_ADDR_H, // Destination High Address
+    GS_ADDR_L, // Destination Low Address
+    LORA_CHANNEL, // Channel
+    &currentTelemetry, 
+    sizeof(Telemetry_t)
+  );
+
+  // Debug output via serial is crucial for verification
+  if (rs.code != E32_SUCCESS) {
+      Serial.print("TX Error: ");
+      Serial.println(rs.getResponseDescription());
+  } else {
+      Serial.print("TX OK: Thrust=");
+      Serial.println(currentTelemetry.thrust);
+  }
 }
