@@ -219,17 +219,16 @@
         .control-panel {
             width: 95%;
             max-width: 1400px;
-            display: grid;
-            grid-template-columns: 1fr 1.5fr 2fr 1.5fr 1fr; 
-            gap: 15px;
+            display: flex; /* Changed from grid to flex for better centering/organization */
+            justify-content: center;
+            gap: 20px; /* Space between groups */
+            padding: 20px;
         }
-        .control-panel .command-section:nth-child(3) {
-            grid-column: 3 / span 1; 
-        }
-
+        
+        /* Command Sections for grouping */
         .command-section {
             display: flex;
-            gap: 10px;
+            gap: 10px; /* Space between buttons */
             align-items: center;
             justify-content: center;
         }
@@ -257,7 +256,6 @@
         .connect-btn, .safe-btn, .arm-btn, .data-btn {
              background-color: var(--color-panel);
              color: var(--color-text);
-             /* Ensure they use the standard border for consistency */
              border-color: var(--color-panel-border); 
         }
         /* Override specific buttons with unique colors for visual status/focus */
@@ -393,30 +391,21 @@
 
     <!-- BOTTOM CENTER: Reorganized Controls -->
     <div class="control-panel">
-        <!-- Section 1: Connection -->
+        <!-- Group 1: Connection -->
         <div class="command-section">
             <button id="connectBtn" class="action-btn connect-btn">1. CONNECT GS</button>
         </div>
         
-        <!-- Section 2: Safety/Arming -->
+        <!-- Group 2: Safety/Arming -->
         <div class="command-section">
             <button id="safeBtn" class="control-btn safe-btn" disabled>DISARM / SAFE ('S')</button>
             <button id="armBtn" class="control-btn arm-btn" disabled>ARM SYSTEM ('A')</button>
         </div>
 
-        <!-- Section 3: LAUNCH (Center) -->
+        <!-- Group 3: Firing Control (Center) -->
         <div class="command-section">
             <button id="launchBtn" class="control-btn launch-btn" disabled>LAUNCH (T-30s)</button>
-        </div>
-
-        <!-- Section 4: Test Fire -->
-        <div class="command-section">
             <button id="testBtn" class="control-btn test-btn" disabled>TEST FIRE (300ms)</button>
-        </div>
-
-        <!-- Section 5: Empty space due to button relocation -->
-        <div class="command-section">
-            <!-- Used to maintain grid alignment -->
         </div>
     </div>
     
