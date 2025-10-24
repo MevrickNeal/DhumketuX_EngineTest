@@ -3,34 +3,58 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DhumketuX Engine Test System</title>
+    <title>DhumketuX Mission Control</title>
     <!-- Chart.js for real-time graphing -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
     <!-- FileSaver.js for easy CSV download -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     <style>
-        /* Reverted to Dark Glassy Theme */
+        /* Global Variables for Day/Night Mode */
+        :root {
+            --bg-dark: linear-gradient(135deg, #1f2733 0%, #0d121c 100%);
+            --bg-light: linear-gradient(135deg, #E0E0E0 0%, #FFFFFF 100%);
+            --color-text: #E0E0E0;
+            --color-accent: #00BFFF; /* Electric Blue */
+            --color-panel: rgba(255, 255, 255, 0.08); /* Glassy Dark */
+            --color-panel-border: rgba(0, 191, 255, 0.2);
+            --color-log-bg: rgba(0, 0, 0, 0.5);
+            --color-log-text: #00BFFF;
+        }
+
+        /* Day Mode Variables (Toggle Target) */
+        .day-mode {
+            --color-text: #111;
+            --bg-dark: var(--bg-light);
+            --color-panel: rgba(0, 0, 0, 0.05);
+            --color-panel-border: rgba(0, 0, 0, 0.3);
+            --color-log-bg: rgba(255, 255, 255, 0.8);
+            --color-log-text: #005691;
+        }
+
+        /* --- Global Styles --- */
         body {
-            background: linear-gradient(135deg, #1f2733 0%, #0d121c 100%);
-            color: #E0E0E0;
-            font-family: 'Inter', sans-serif; /* Professional Sans-serif */
+            background: var(--bg-dark);
+            color: var(--color-text);
+            font-family: 'Inter', sans-serif;
             margin: 0;
             padding: 0;
             display: flex;
             flex-direction: column;
             align-items: center;
             min-height: 100vh;
+            transition: background 0.5s, color 0.5s;
         }
 
         /* --- Glassy UI Panel Styles --- */
         .panel, .control-panel, .metrics-header {
-            background: rgba(255, 255, 255, 0.08); /* Semi-transparent white */
-            backdrop-filter: blur(15px); /* Frosted Glass Effect */
-            border: 1px solid rgba(0, 191, 255, 0.2); /* Soft Blue Border */
+            background: var(--color-panel);
+            backdrop-filter: blur(15px); 
+            border: 1px solid var(--color-panel-border); 
             border-radius: 12px; 
             padding: 15px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5); /* Soft Shadow */
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5); 
             margin: 15px;
+            transition: background 0.5s, border 0.5s, box-shadow 0.5s;
         }
 
         /* --- Top Header Layout (Logo, Timer, Temp/Humi) --- */
@@ -47,6 +71,9 @@
             text-align: left;
             flex-basis: 25%;
             padding-left: 15px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
         }
 
         .countdown-container {
@@ -58,13 +85,41 @@
             flex-basis: 25%;
             text-align: right;
             padding-right: 15px;
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 15px;
+        }
+
+        /* Status Indicator Dots */
+        .status-dot {
+            height: 12px;
+            width: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 5px;
+            transition: background-color 0.3s;
+        }
+        .status-label {
+            font-size: 0.9em;
+            color: #999;
+        }
+
+        /* Blinking animation for countdown */
+        @keyframes blink-blue {
+            0% { box-shadow: 0 0 5px rgba(0, 191, 255, 0.6); }
+            50% { box-shadow: 0 0 15px var(--color-accent); }
+            100% { box-shadow: 0 0 5px rgba(0, 191, 255, 0.6); }
+        }
+        .blinking {
+            animation: blink-blue 0.8s infinite;
         }
 
         /* Countdown Timer Styling */
         #countdownDisplay {
             font-size: 2.8em;
             font-weight: 700;
-            color: #00BFFF; /* Electric Blue for focus */
+            color: var(--color-accent);
             font-family: 'Courier New', monospace;
             text-shadow: 0 0 10px rgba(0, 191, 255, 0.6);
             padding: 10px 20px;
@@ -78,7 +133,7 @@
             font-size: 1.1em;
             font-family: 'Courier New', monospace;
             line-height: 1.4;
-            color: #FFFFFF;
+            color: var(--color-text);
             background: rgba(0, 0, 0, 0.2);
             padding: 8px;
             border-radius: 6px;
@@ -114,8 +169,8 @@
             height: calc(100% - 70px);
             display: flex;
             flex-direction: column;
-            background: rgba(0, 0, 0, 0.7); /* Darker panel background for graph clarity */
-            border: 1px solid rgba(0, 191, 255, 0.3);
+            background: rgba(0, 0, 0, 0.7); 
+            border: 1px solid var(--color-panel-border);
         }
 
         /* Real-Time Metrics Header (Top of Graph) */
@@ -126,16 +181,14 @@
             padding: 10px 20px;
             margin-bottom: 5px;
             background: rgba(0, 0, 0, 0.4);
+            border-radius: 8px;
         }
-        .metric-label {
-            color: #999;
-            font-weight: 300;
-            text-transform: uppercase;
-        }
-        .metric-value {
-            font-size: 1.6em; 
-            font-family: 'Courier New', monospace; 
-            color: #FFFFFF; 
+        .metric-label { color: #999; font-weight: 300; text-transform: uppercase; }
+        .metric-value { font-size: 1.6em; font-family: 'Courier New', monospace; color: var(--color-text); }
+        .metrics-header .action-btn { 
+            font-size: 1.0em; 
+            padding: 10px 15px; 
+            border-radius: 8px; /* Slightly rounder than control buttons */
         }
 
         /* Webcam and Status */
@@ -145,111 +198,153 @@
             min-height: 200px;
             border-radius: 8px;
             background: #000;
-            border: 1px solid #00BFFF;
+            border: 1px solid var(--color-accent);
         }
         #status-display-box {
             margin-top: 15px;
             padding: 10px;
             border-radius: 6px;
-            background: rgba(0, 0, 0, 0.5);
+            background: var(--color-log-bg);
             font-family: 'Courier New', monospace; 
-            color: #00BFFF; 
+            color: var(--color-log-text);
             font-size: 0.9em;
             line-height: 1.5;
             white-space: pre-wrap;
             text-align: left;
             flex-grow: 1;
-            border: 1px solid rgba(0, 191, 255, 0.4);
+            border: 1px solid var(--color-panel-border);
         }
 
-        /* Control Panel */
+        /* --- Reorganized and Professional Control Panel --- */
         .control-panel {
-            gap: 25px;
             width: 95%;
             max-width: 1400px;
+            display: grid;
+            grid-template-columns: 1fr 1.5fr 2fr 1.5fr 1fr; /* Connect | Safety | Launch (Center) | Test | Save (Moved) */
+            gap: 15px;
+        }
+        .control-panel .command-section:nth-child(3) {
+            /* Center launch button span */
+            grid-column: 3 / span 1; 
         }
 
-        /* Buttons */
-        .action-btn, .control-btn {
-            padding: 12px 25px;
-            border-radius: 6px;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
-            transition: all 0.15s;
-            font-family: 'Inter', sans-serif;
-            font-weight: 600;
-            border: none;
-        }
-        /* Button Coloring (Blue/Black/White theme) */
-        .connect-btn { background-color: #00BFFF; color: #111; }
-        .safe-btn { background-color: #00CC66; color: white; } 
-        .arm-btn { background-color: #FFD700; color: #111; } 
-        .test-btn { background-color: #FF8C00; color: white; } 
-        .launch-btn { background-color: #FF3366; color: white; font-size: 1.1em; } 
-        
-        .action-btn:hover:not(:disabled), .control-btn:hover:not(:disabled) {
-            opacity: 0.9;
-            transform: scale(1.02);
-            box-shadow: 0 0 10px rgba(0, 191, 255, 0.6);
-        }
-
-        /* Chart Canvas Size */
-        #thrustChart {
-            flex-grow: 1;
-        }
-
-        /* --- Custom Modal Styling for Password --- */
-        .modal {
-            display: none; /* Hidden by default */
-            position: fixed;
-            z-index: 100;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            overflow: auto;
-            background-color: rgba(0, 0, 0, 0.8);
-            backdrop-filter: blur(5px);
+        .command-section {
+            display: flex;
+            gap: 10px;
             align-items: center;
             justify-content: center;
         }
 
-        .modal-content {
-            background: rgba(255, 255, 255, 0.1);
-            margin: auto;
-            padding: 30px;
-            border: 1px solid #00BFFF;
-            width: 80%;
-            max-width: 400px;
-            border-radius: 12px;
-            box-shadow: 0 0 20px rgba(0, 191, 255, 0.6);
-            text-align: center;
+        /* Buttons (PROFESSIONAL TACTICAL LOOK) */
+        .action-btn, .control-btn {
+            padding: 14px 22px; 
+            border-radius: 8px; /* Slightly rounder for a cleaner panel look */
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5); 
+            transition: all 0.1s ease-out;
+            font-family: 'Inter', sans-serif;
+            font-weight: 700; 
+            border: 1px solid var(--color-panel-border); 
+            cursor: pointer;
+            text-transform: uppercase;
         }
 
-        .modal-content input[type="password"] {
-            width: 90%;
-            padding: 10px;
-            margin: 10px 0 20px 0;
-            border: 1px solid #00BFFF;
-            background: #000;
-            color: white;
-            border-radius: 4px;
-            font-size: 1.2em;
+        /* Hover effect for feedback */
+        .action-btn:not(:disabled):hover, .control-btn:not(:disabled):hover {
+            box-shadow: 0 0 10px var(--color-accent);
+            transform: translateY(-1px);
+        }
+        
+        /* Non-critical buttons are Monochromatic/Glassy */
+        .connect-btn, .safe-btn, .arm-btn {
+             background-color: var(--color-panel);
+             color: var(--color-text);
+        }
+        .connect-btn { border-color: var(--color-accent); }
+        .safe-btn { border-color: #00CC66; color: #00CC66; } 
+        .arm-btn { border-color: #FFD700; color: #FFD700; } 
+        
+        /* Special Styling for Center Launch Button (PRIMARY FOCUS) */
+        #launchBtn {
+            background-color: #FF3366; /* Red for launch/fire */
+            color: white; 
+            font-size: 1.6em; 
+            padding: 20px 45px;
+            border-radius: 8px; 
+            border: 1px solid #FF3366;
+            box-shadow: 0 0 18px rgba(255, 51, 102, 0.9);
+        }
+        #launchBtn:not(:disabled):hover {
+            box-shadow: 0 0 25px rgba(255, 51, 102, 1);
+        }
+
+        /* TEST FIRE (SECONDARY FOCUS) */
+        #testBtn {
+            background-color: #FF8C00; 
+            color: white; 
+            border: 1px solid #FF8C00;
+        }
+
+        /* Save Data (Now in Metrics Header) */
+        .data-btn { background-color: var(--color-accent); color: #111; font-weight: 700; }
+        
+        .action-btn:disabled, .control-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            box-shadow: none;
+            transform: none;
+        }
+
+        /* Custom Modal Styles for Password Prompt */
+        .modal {
+            display: none; 
+            position: fixed; 
+            z-index: 100;
+            left: 0; top: 0; width: 100%; height: 100%; 
+            overflow: auto; background-color: rgba(0,0,0,0.6); 
+            justify-content: center; align-items: center;
+        }
+        .modal-content {
+            background: var(--bg-dark);
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.8);
+            width: 300px;
+            text-align: center;
+            border: 1px solid var(--color-accent);
+        }
+        #passwordInput {
+            width: 80%; padding: 10px; margin: 10px 0 20px 0;
+            border-radius: 4px; border: 1px solid var(--color-accent);
+            background: rgba(0, 0, 0, 0.5); color: var(--color-text);
+            font-family: 'Courier New', monospace;
         }
     </style>
 </head>
-<body>
+<body id="appBody">
     <div class="top-header">
         <div class="logo-placeholder">
-            <img src="https://placehold.co/150x40/0d121c/00BFFF?text=DhumketuX" alt="DhumketuX Logo" width="150" style="border-radius:4px; border: 1px solid #00BFFF;">
+            <img src="https://placehold.co/150x40/0d121c/00BFFF?text=DhumketuX" alt="DhumketuX Logo" width="150" style="border-radius:4px; border: 1px solid var(--color-accent);">
+            <!-- Status Indicators -->
+            <div>
+                <span class="status-label">GS:</span>
+                <span id="gsStatusDot" class="status-dot" style="background-color: red;"></span>
+                <span class="status-label">LP:</span>
+                <span id="lpStatusDot" class="status-dot" style="background-color: red;"></span>
+            </div>
         </div>
 
-        <!-- NEW: Countdown Timer (Top Center) -->
+        <!-- Countdown Timer (Top Center) -->
         <div class="countdown-container">
-            <div id="countdownDisplay">ARMED / READY</div>
+            <div id="countdownDisplay">SAFE MODE</div>
         </div>
 
-        <!-- NEW: Temperature/Humidity Monitor (Top Right) -->
+        <!-- Temp/Humi Monitor (Top Right) -->
         <div class="temp-humi-monitor">
+             <!-- Day/Night Toggle Switch -->
+            <label class="toggle-switch">
+                <input type="checkbox" id="darkModeToggle" checked>
+                <span class="slider"></span>
+            </label>
             <div class="temp-humi-data">
                 T: <span id="currentTemp">-- °C</span><br>
                 H: <span id="currentHumi">-- %</span>
@@ -262,9 +357,9 @@
         <div class="panel webcam-panel">
             <h3>Live Pad Feed</h3>
             <video id="webcam-feed" autoplay></video>
-            <h3>Command Log</h3>
+            <h3>DEBUG/COMMAND LOG</h3>
             <div id="status-display-box">
-                STATUS: **DISCONNECTED**
+                STATUS: DISCONNECTED (GS/LP Red)
             </div>
         </div>
 
@@ -284,7 +379,8 @@
                     <span class="metric-label">Time to Peak</span>
                     <span class="metric-value" id="timeToPeak">-- s</span>
                 </div>
-                <button id="saveDataBtn" class="action-btn connect-btn">💾 Save Data</button>
+                <!-- SAVE DATA BUTTON MOVED HERE -->
+                <button id="saveDataBtn" class="action-btn data-btn">💾 SAVE DATA</button>
             </div>
 
             <!-- Thrust Graph -->
@@ -294,19 +390,32 @@
         </div>
     </main>
 
-    <!-- BOTTOM CENTER: Controls and Connection -->
+    <!-- BOTTOM CENTER: Reorganized Controls -->
     <div class="control-panel">
-        <button id="connectBtn" class="action-btn connect-btn">1. CONNECT GROUND STATION</button>
+        <!-- Section 1: Connection -->
+        <div class="command-section">
+            <button id="connectBtn" class="action-btn connect-btn">1. CONNECT GS</button>
+        </div>
         
-        <div class="command-controls">
+        <!-- Section 2: Safety/Arming -->
+        <div class="command-section">
             <button id="safeBtn" class="control-btn safe-btn" disabled>DISARM / SAFE ('S')</button>
             <button id="armBtn" class="control-btn arm-btn" disabled>ARM SYSTEM ('A')</button>
         </div>
 
-        <div class="fire-controls">
-            <!-- Buttons now call the password prompt function -->
-            <button id="testBtn" class="control-btn test-btn" disabled>TEST FIRE ('T')</button>
-            <button id="launchBtn" class="control-btn launch-btn" disabled>LAUNCH (30s Countdown)</button>
+        <!-- Section 3: LAUNCH (Center) -->
+        <div class="command-section">
+            <button id="launchBtn" class="control-btn launch-btn" disabled>LAUNCH (T-30s)</button>
+        </div>
+
+        <!-- Section 4: Test Fire -->
+        <div class="command-section">
+            <button id="testBtn" class="control-btn test-btn" disabled>TEST FIRE (300ms)</button>
+        </div>
+
+        <!-- Section 5: Empty space due to button relocation -->
+        <div class="command-section">
+            <!-- Used to maintain grid alignment -->
         </div>
     </div>
     
@@ -314,8 +423,8 @@
     <div id="passwordModal" class="modal">
         <div class="modal-content">
             <h3 style="color: #FFD700;">CONFIRM EXECUTION</h3>
-            <p>Enter the launch authorization password (Default: 2026):</p>
-            <input type="password" id="passwordInput" placeholder="2026">
+            <p>Enter the launch authorization password:</p>
+            <input type="password" id="passwordInput" placeholder="Enter Password">
             <button id="confirmExecuteBtn" class="action-btn launch-btn">Execute Command</button>
             <button id="cancelExecuteBtn" class="action-btn safe-btn" style="margin-left: 10px;">Cancel</button>
             <p id="passwordError" style="color: #FF3366; margin-top: 10px; display: none;">Invalid Password.</p>
@@ -329,39 +438,35 @@
         let outputStream; 
         let chart;
         let isArmed = false; 
-        let commandToExecute = null; // Stores 'LAUNCH' or 'TEST' command while modal is open
+        let commandToExecute = null; 
 
-        // Data storage for charting and CSV export
+        // Data storage
         let telemetryData = []; 
         let timeLabels = [];
         let thrustValues = [];
 
-        // Engine Test Metrics
+        // Metrics
         let maxThrustValue = 0.0;
         let ignitionTime_ms = null;
         let peakThrustTime_ms = null;
         
         const DEFAULT_PASSWORD = '2026';
-        const TEST_FIRE_DELAY_MS = 300; // New delay for Test Fire command
+        const TEST_FIRE_DELAY_MS = 300; 
+        let countdownInterval = null;
 
         // UI Elements
-        const connectBtn = document.getElementById('connectBtn');
-        const saveDataBtn = document.getElementById('saveDataBtn');
         const statusDisplayBox = document.getElementById('status-display-box');
+        const gsStatusDot = document.getElementById('gsStatusDot');
+        const lpStatusDot = document.getElementById('lpStatusDot');
+        const darkModeToggle = document.getElementById('darkModeToggle');
+
+        const connectBtn = document.getElementById('connectBtn');
         const armBtn = document.getElementById('armBtn');
         const safeBtn = document.getElementById('safeBtn');
         const testBtn = document.getElementById('testBtn');
         const launchBtn = document.getElementById('launchBtn');
-        const webcamFeed = document.getElementById('webcam-feed');
         const countdownDisplay = document.getElementById('countdownDisplay');
         
-        const maxThrustDisplay = document.getElementById('maxThrust');
-        const ignitionTimeDisplay = document.getElementById('ignitionTime');
-        const timeToPeakDisplay = document.getElementById('timeToPeak');
-
-        const currentTempDisplay = document.getElementById('currentTemp');
-        const currentHumiDisplay = document.getElementById('currentHumi');
-
         const passwordModal = document.getElementById('passwordModal');
         const passwordInput = document.getElementById('passwordInput');
         const confirmExecuteBtn = document.getElementById('confirmExecuteBtn');
@@ -386,12 +491,16 @@
             initChart();
             initWebcam();
             initEventListeners();
-            statusDisplayBox.textContent = 'STATUS: DISCONNECTED\nWaiting for Web Serial Connection...';
+            updateStatusDots(false, false);
+            statusDisplayBox.textContent = 'STATUS: DISCONNECTED (GS/LP Red)';
+            
+            // Set initial theme based on toggle (Default is dark mode)
+            document.getElementById('appBody').classList.toggle('day-mode', !darkModeToggle.checked);
         }
 
         function initEventListeners() {
+            document.getElementById('saveDataBtn').addEventListener('click', saveCSV);
             connectBtn.addEventListener('click', connectSerial);
-            saveDataBtn.addEventListener('click', saveCSV);
             armBtn.addEventListener('click', () => sendCommand(COMMANDS.ARM));
             safeBtn.addEventListener('click', () => sendCommand(COMMANDS.SAFE));
             
@@ -403,20 +512,45 @@
             confirmExecuteBtn.addEventListener('click', authorizeAndExecute);
             cancelExecuteBtn.addEventListener('click', hidePasswordModal);
             passwordInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    authorizeAndExecute();
-                }
+                if (e.key === 'Enter') { authorizeAndExecute(); }
             });
+
+            // Theme Toggle
+            darkModeToggle.addEventListener('change', () => {
+                document.getElementById('appBody').classList.toggle('day-mode', !darkModeToggle.checked);
+            });
+        }
+
+        // --- STATUS & DEBUGGING ---
+
+        function updateStatusDots(gsConnected, lpReceiving) {
+            gsStatusDot.style.backgroundColor = gsConnected ? 'lime' : 'red';
+            lpStatusDot.style.backgroundColor = lpReceiving ? 'lime' : 'red';
+            gsStatusDot.classList.remove('blinking');
+        }
+
+        function logPacket(type, payload) {
+            const timestamp = new Date().toLocaleTimeString('en-US');
+            let color;
+            if (type === 'TX') color = '#FFD700'; // Command Sent
+            else if (type === 'RX') color = '#00FFC0'; // Telemetry Received
+            else if (type === 'SYS') color = '#00BFFF'; // System Event
+            else color = '#FF3366'; // Error
+            
+            // Use innerHTML to allow styling of the payload
+            statusDisplayBox.innerHTML += `\n[${timestamp}] <span style="color:${color};">${type}</span>: ${payload}`;
+            // Scroll to bottom
+            statusDisplayBox.scrollTop = statusDisplayBox.scrollHeight;
         }
 
         // --- PASSWORD MODAL FUNCTIONS ---
 
         function promptForPassword(command) {
             if (!isArmed) { 
-                 statusDisplayBox.textContent += '\nWARNING: Please ARM the system first before firing.';
+                 logPacket('WARN', 'Please ARM the system first before firing.');
                  return;
             }
-            if (launchBtn.disabled && command === COMMANDS.LAUNCH) return; // Prevent double launch
+            if (launchBtn.disabled && command === COMMANDS.LAUNCH) return; 
 
             commandToExecute = command;
             passwordInput.value = '';
@@ -443,7 +577,7 @@
             }
         }
 
-        // --- 1. WEB SERIAL API CONNECTION (No Changes) ---
+        // --- WEB SERIAL CONNECTION ---
         async function connectSerial() {
             if (!('serial' in navigator)) {
                 statusDisplayBox.textContent = 'STATUS: ERROR - Web Serial API not supported in this browser.';
@@ -454,10 +588,8 @@
                 port = await navigator.serial.requestPort();
                 await port.open({ baudRate: 9600 }); 
 
-                statusDisplayBox.textContent = 'STATUS: CONNECTING...';
                 connectBtn.disabled = true;
-
-                // Enable command buttons
+                updateStatusDots(true, false); 
                 [armBtn, safeBtn, testBtn, launchBtn].forEach(btn => btn.disabled = false);
                 
                 const textDecoder = new TextDecoderStream();
@@ -469,27 +601,31 @@
                 outputStream = textEncoder.writable;
 
                 readLoop();
-                statusDisplayBox.textContent = 'STATUS: CONNECTED\nListening for telemetry...';
+                logPacket('SYS', 'GS Connected to USB Serial.');
 
             } catch (error) {
                 console.error('Serial Connection Error:', error);
-                statusDisplayBox.textContent = `STATUS: ERROR - ${error.message}`;
+                logPacket('ERR', `Connection failed: ${error.message}`);
                 connectBtn.disabled = false;
+                updateStatusDots(false, false);
             }
         }
 
         async function readLoop() {
+            let lpConfirmed = false;
             while (true) {
                 try {
                     const { value, done } = await reader.read();
-                    if (done) {
-                        console.log('Reader has been closed.');
-                        break;
-                    }
+                    if (done) { break; }
                     if (value) {
                         const lines = value.split('\n').filter(line => line.trim().length > 0);
                         if (lines.length > 0) {
                             processTelemetry(lines.pop().trim());
+                            if (!lpConfirmed) {
+                                lpConfirmed = true;
+                                updateStatusDots(true, true);
+                                logPacket('SYS', 'LP Data Received. Link Confirmed (LP Green).');
+                            }
                         }
                     }
                 } catch (error) {
@@ -499,36 +635,29 @@
             }
         }
 
-        // --- 2. DATA PROCESSING & CHARTING (No Changes) ---
-
+        // --- 3. DATA PROCESSING & CHARTING ---
         function processTelemetry(dataLine) {
+            logPacket('RX', dataLine); // Log all incoming telemetry
+            
             const parts = dataLine.split(',');
             let dataPoint = { thrust: null, temp: null, humi: null };
 
             parts.forEach(part => {
-                if (part.startsWith("Thrust:")) {
-                    dataPoint.thrust = parseFloat(part.replace('Thrust:', '').trim());
-                } else if (part.startsWith("Temp:")) {
-                    dataPoint.temp = parseFloat(part.replace('Temp:', '').trim());
-                } else if (part.startsWith("Humi:")) {
-                    dataPoint.humi = parseFloat(part.replace('Humi:', '').trim());
-                }
+                if (part.startsWith("Thrust:")) { dataPoint.thrust = parseFloat(part.replace('Thrust:', '').trim()); } 
+                else if (part.startsWith("Temp:")) { dataPoint.temp = parseFloat(part.replace('Temp:', '').trim()); } 
+                else if (part.startsWith("Humi:")) { dataPoint.humi = parseFloat(part.replace('Humi:', '').trim()); }
             });
 
+            // Update Metrics and Data
             if (dataPoint.thrust !== null) {
                 const now = new Date();
                 const timeStamp = now.toLocaleTimeString('en-US');
 
+                document.getElementById('maxThrust').textContent = `${dataPoint.thrust.toFixed(2)} N`;
                 detectIgnition(dataPoint.thrust, now.getTime());
                 detectPeakThrust(dataPoint.thrust, now.getTime());
 
-                telemetryData.push({ 
-                    time: timeStamp, 
-                    thrust: dataPoint.thrust, 
-                    temp: dataPoint.temp, 
-                    humi: dataPoint.humi,
-                    timestamp_ms: now.getTime()
-                });
+                telemetryData.push({ time: timeStamp, thrust: dataPoint.thrust, temp: dataPoint.temp, humi: dataPoint.humi, timestamp_ms: now.getTime() });
 
                 timeLabels.push(timeStamp);
                 thrustValues.push(dataPoint.thrust);
@@ -545,9 +674,10 @@
                 }
             }
 
+            // Update Temp/Humi Display
             if (dataPoint.temp !== null && dataPoint.humi !== null) {
-                currentTempDisplay.textContent = `${dataPoint.temp.toFixed(1)} °C`;
-                currentHumiDisplay.textContent = `${dataPoint.humi.toFixed(1)} %`;
+                document.getElementById('currentTemp').textContent = `${dataPoint.temp.toFixed(1)} °C`;
+                document.getElementById('currentHumi').textContent = `${dataPoint.humi.toFixed(1)} %`;
             }
         }
 
@@ -590,18 +720,94 @@
                 }
             });
         }
+
+        // --- 4. COMMAND TRANSMISSION & EXECUTION ---
+
+        async function sendCommand(command) {
+            if (!port || !outputStream) {
+                logPacket('ERR', 'Not connected. Cannot send command.');
+                return;
+            }
+
+            try {
+                const writer = outputStream.getWriter();
+                await writer.write(command + '\n');
+                writer.releaseLock();
+                
+                logPacket('TX', command); // Log only the command character
+
+                if (command === COMMANDS.ARM) {
+                    isArmed = true;
+                    logPacket('SYS', 'System ARMED. Ready for Launch.');
+                    countdownDisplay.textContent = 'ARMED / READY';
+                    countdownDisplay.style.color = '#00BFFF';
+                } else if (command === COMMANDS.SAFE) {
+                    isArmed = false;
+                    logPacket('SYS', 'System DISARMED. Safe Mode Engaged.');
+                    countdownDisplay.textContent = 'SAFE MODE';
+                    countdownDisplay.style.color = '#00CC66';
+                }
+
+            } catch (error) {
+                console.error('Error sending command:', error);
+                logPacket('ERR', `Command send failed: ${error.message}`);
+            }
+        }
         
-        // --- 3. IGNITION AND PEAK DETECTION (No Changes) ---
+        function handleTestFire() {
+            testBtn.disabled = true;
+            launchBtn.disabled = true;
+
+            countdownDisplay.textContent = 'TEST PULSE';
+            countdownDisplay.style.color = '#FF8C00';
+
+            sendCommand(COMMANDS.TEST);
+
+            setTimeout(() => {
+                testBtn.disabled = false;
+                launchBtn.disabled = false;
+                countdownDisplay.textContent = 'ARMED / READY';
+                countdownDisplay.style.color = '#00BFFF';
+                logPacket('SYS', `TEST FIRE COMPLETE (${TEST_FIRE_DELAY_MS}ms).`);
+            }, TEST_FIRE_DELAY_MS);
+        }
+
+        function handleLaunchCountdown() {
+            let countdown = 30;
+            launchBtn.disabled = true;
+            testBtn.disabled = true;
+            
+            gsStatusDot.classList.add('blinking');
+            logPacket('SYS', 'Launch countdown initiated (T-30s).');
+
+            countdownInterval = setInterval(() => {
+                if (countdown >= 0) {
+                    countdownDisplay.textContent = `T-${String(countdown).padStart(2, '0')}`;
+                    countdownDisplay.style.color = countdown <= 10 ? '#FF3366' : '#FFD700';
+                    countdown--;
+                } else {
+                    clearInterval(countdownInterval);
+                    gsStatusDot.classList.remove('blinking'); 
+                    
+                    countdownDisplay.textContent = 'IGNITION';
+                    countdownDisplay.style.color = '#FF3366';
+
+                    logPacket('SYS', `IGNITION COMMAND SENT!`);
+                    sendCommand(COMMANDS.LAUNCH);
+                    safeBtn.disabled = false; 
+                }
+            }, 1000);
+        }
+
+        // --- 5. UTILITIES (Metrics, Webcam, CSV) ---
         
         function detectIgnition(currentThrust, currentTimeMs) {
+            const lastPoint = telemetryData[telemetryData.length - 1];
             if (ignitionTime_ms === null && currentThrust > IGNITION_THRESHOLD) {
-                const lastPoint = telemetryData[telemetryData.length - 1];
                 if (!lastPoint || lastPoint.thrust < NOISE_FLOOR) { 
                     ignitionTime_ms = currentTimeMs;
-                    
-                    const timeString = new Date(ignitionTime_ms).toLocaleTimeString('en-US');
-                    ignitionTimeDisplay.textContent = timeString;
-                    ignitionTimeDisplay.style.color = '#FFD700'; 
+                    document.getElementById('ignitionTime').textContent = new Date(ignitionTime_ms).toLocaleTimeString('en-US');
+                    document.getElementById('ignitionTime').style.color = '#FFD700'; 
                 }
             }
         }
@@ -611,98 +817,19 @@
                 maxThrustValue = currentThrust;
                 peakThrustTime_ms = currentTimeMs;
                 
-                maxThrustDisplay.textContent = `${maxThrustValue.toFixed(2)} N`;
-                maxThrustDisplay.style.color = '#FF3366'; 
+                document.getElementById('maxThrust').textContent = `${maxThrustValue.toFixed(2)} N`;
+                document.getElementById('maxThrust').style.color = '#FF3366'; 
                 
                 if (ignitionTime_ms !== null) {
                     const ttp_s = (peakThrustTime_ms - ignitionTime_ms) / 1000;
-                    timeToPeakDisplay.textContent = `${ttp_s.toFixed(2)} s`;
-                    timeToPeakDisplay.style.color = '#FF3366';
+                    document.getElementById('timeToPeak').textContent = `${ttp_s.toFixed(2)} s`;
+                    document.getElementById('timeToPeak').style.color = '#FF3366';
                 }
             }
         }
-
-        // --- 4. COMMAND TRANSMISSION & EXECUTION ---
-
-        async function sendCommand(command) {
-            if (!port || !outputStream) {
-                statusDisplayBox.textContent = "STATUS: ERROR - Not connected. Click CONNECT.";
-                return;
-            }
-
-            try {
-                const writer = outputStream.getWriter();
-                await writer.write(command + '\n');
-                writer.releaseLock();
-                
-                statusDisplayBox.textContent += `\nCOMMAND SENT: ${command}`;
-
-                if (command === COMMANDS.ARM) {
-                    isArmed = true;
-                    statusDisplayBox.textContent += '\nSystem ARMED. Ready for Launch.';
-                    countdownDisplay.textContent = 'ARMED / READY';
-                    countdownDisplay.style.color = '#00BFFF';
-                } else if (command === COMMANDS.SAFE) {
-                    isArmed = false;
-                    statusDisplayBox.textContent += '\nSystem DISARMED. Safe Mode Engaged.';
-                    countdownDisplay.textContent = 'SAFE / DISARMED';
-                    countdownDisplay.style.color = '#00CC66';
-                }
-
-            } catch (error) {
-                console.error('Error sending command:', error);
-                statusDisplayBox.textContent += `\nERROR - Command send failed: ${error.message}`;
-            }
-        }
-        
-        // Function for Direct Test Fire (New delay implemented)
-        function handleTestFire() {
-            // Disable launch buttons during the brief test
-            testBtn.disabled = true;
-            launchBtn.disabled = true;
-
-            countdownDisplay.textContent = 'TEST FIRE PULSE...';
-            countdownDisplay.style.color = '#FF8C00';
-
-            // Send 'T' command
-            sendCommand(COMMANDS.TEST);
-
-            // Wait for 300 milliseconds (the new delay) before re-enabling
-            setTimeout(() => {
-                testBtn.disabled = false;
-                launchBtn.disabled = false;
-                countdownDisplay.textContent = 'ARMED / READY';
-                countdownDisplay.style.color = '#00BFFF';
-                statusDisplayBox.textContent += `\nTEST FIRE COMPLETE. System re-armed.`;
-            }, TEST_FIRE_DELAY_MS);
-        }
-
-        // Function for 30s Countdown (No change to timing)
-        function handleLaunchCountdown() {
-            let countdown = 30;
-            launchBtn.disabled = true;
-            testBtn.disabled = true;
-
-            const countdownInterval = setInterval(() => {
-                if (countdown >= 0) {
-                    countdownDisplay.textContent = `T-${String(countdown).padStart(2, '0')}`;
-                    countdownDisplay.style.color = countdown <= 10 ? '#FF3366' : '#FFD700';
-                    countdown--;
-                } else {
-                    clearInterval(countdownInterval);
-                    countdownDisplay.textContent = 'IGNITION';
-                    countdownDisplay.style.color = '#FF3366';
-
-                    statusDisplayBox.textContent += `\nIGNITION COMMAND SENT!`;
-                    sendCommand(COMMANDS.LAUNCH);
-                    safeBtn.disabled = false; 
-                }
-            }, 1000);
-        }
-
-        // --- 5. UTILITIES (No Changes) ---
 
         function initWebcam() {
+            const webcamFeed = document.getElementById('webcam-feed');
             if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
                 navigator.mediaDevices.getUserMedia({ video: true })
                     .then(stream => {
@@ -710,14 +837,14 @@
                     })
                     .catch(err => {
                         console.error("Webcam access denied or failed:", err);
-                        webcamFeed.outerHTML = '<div style="background:#222; color:#aaa; padding:50px; border-radius:8px; border: 1px solid #00BFFF;">WEBCAM ERROR: Feed unavailable.</div>';
+                        webcamFeed.outerHTML = '<div style="background:#222; color:#aaa; padding:50px; border-radius:8px; border: 1px solid var(--color-accent);">WEBCAM ERROR: Feed unavailable.</div>';
                     });
             }
         }
 
         function saveCSV() {
             if (telemetryData.length === 0) {
-                statusDisplayBox.textContent += "\nWARNING: No data collected yet!";
+                logPacket('WARN', 'No data collected yet!');
                 return;
             }
 
@@ -739,7 +866,7 @@
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
             saveAs(blob, `DhumketuX_Test_Data_${new Date().toISOString().replace(/[:.]/g, "-")}.csv`);
             
-            statusDisplayBox.textContent += "\nDATA SAVED as CSV.";
+            logPacket('SYS', 'DATA SAVED as CSV.');
         }
     </script>
 </body>
