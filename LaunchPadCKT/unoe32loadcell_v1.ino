@@ -233,7 +233,13 @@ void transmitTelemetry() {
       Serial.print("TX Error: ");
       Serial.println(rs.getResponseDescription());
   } else {
+      // FIX: Include all telemetry data in the debug output
       Serial.print("TX OK: Thrust=");
-      Serial.println(currentTelemetry.thrust);
+      Serial.print(currentTelemetry.thrust);
+      Serial.print(" N, Temp=");
+      Serial.print(currentTelemetry.temperature);
+      Serial.print(" C, Humi=");
+      Serial.print(currentTelemetry.humidity);
+      Serial.println(" %");
   }
 }
