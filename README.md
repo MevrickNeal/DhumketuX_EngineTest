@@ -132,74 +132,93 @@ DhumketuX_DETS/
 ├── docs/
 │   └── calibration_guide.md
 └── README.md
-🔧 Setup & Operation Guide
-1️⃣ Configure Hardware
-Ensure both LoRa E32 modules share identical parameters:
+---
 
-Baud: 9600 bps
+<h2 align="center">🔧 Setup & Operation Guide</h2>
 
-Same Channel & Air Data Rate
+### ⚙️ 1️⃣ Configure Hardware
 
-Calibrate the Load Cell and set CALIBRATION_FACTOR in firmware.
+1. Ensure both **LoRa E32** modules share identical parameters:
+   - **Baud Rate:** `9600 bps`  
+   - **Channel:** Same for both modules  
+   - **Air Data Rate:** Same configuration on both ends  
 
-2️⃣ Upload Firmware
-Unit	File	Board	Port
-Launch Pad	LaunchPad_Tx_D13.ino	Arduino Uno	COMx
-Ground Station	GroundStation_Receiver.ino	Arduino Uno	COMy
+2. Calibrate the **Load Cell** using the HX711 calibration sketch.  
+   - Update the `CALIBRATION_FACTOR` value inside the Launch Pad firmware.  
 
-Upload each sketch from Arduino IDE.
+---
 
-3️⃣ Run Ground Station UI
-Open index.html in Chrome or Edge.
+### 💾 2️⃣ Upload Firmware
 
-Click “CONNECT GROUND STATION” and select serial port.
+| Unit | File | Board | Port |
+|------|------|--------|------|
+| **Launch Pad** | `LaunchPad_Tx_D13.ino` | Arduino Uno | COMx |
+| **Ground Station** | `GroundStation_Receiver.ino` | Arduino Uno | COMy |
 
-Observe live telemetry.
+> Upload each sketch separately using the **Arduino IDE**.
 
-Operate sequence:
+---
 
-🔒 ARM SYSTEM (‘A’)
+### 🖥️ 3️⃣ Run Ground Station UI
 
-⚡ TEST FIRE (‘T’) or LAUNCH (‘I’)
+1. Open `index.html` in **Google Chrome** or **Microsoft Edge**.  
+2. Click **“CONNECT GROUND STATION”** and select the correct serial port.  
+3. Observe **live telemetry data** in the dashboard (Thrust, Temperature, Humidity).  
+4. Operate in this recommended sequence:
 
-🟢 DISARM (‘S’) after completion.
+   | Action | Command | Description |
+   |--------|----------|-------------|
+   | 🔒 **ARM SYSTEM** | `'A'` | Enables safety servo and prepares ignition |
+   | ⚡ **TEST FIRE** | `'T'` | Sends a short ignition pulse (50 ms) |
+   | 🚀 **LAUNCH FIRE** | `'I'` | Activates ignition continuously |
+   | 🟢 **DISARM / SAFE** | `'S'` | Returns servo to safe state |
 
-💾 Click “Save Data (CSV)” to export telemetry log.
+5. After the test, click **💾 “Save Data (CSV)”** to export all telemetry logs.
 
-🧠 Safety Guidelines
-Perform tests outdoors, in a controlled and secure zone.
+---
 
-Keep all personnel clear of the exhaust path.
+<h2 align="center">🧠 Safety Guidelines</h2>
 
-Always disarm the system when idle.
+- Perform tests **outdoors** in a secure, controlled area.  
+- Keep all personnel **clear of the exhaust or blast radius**.  
+- Always **DISARM** the system when idle or before handling the igniter.  
+- Verify **servo interlock** before sending any fire command.  
+- Use **separate power lines** for ignition and logic control to prevent interference.
 
-Verify servo interlock before arming ignition.
+---
 
-Use a separate power line for ignition and logic systems.
+<h2 align="center">🚀 Future Roadmap</h2>
 
-🚀 Future Roadmap
- MQTT / WebSocket cloud telemetry
+✅ Planned Upgrades and Features:
+- [ ] MQTT / WebSocket–based cloud telemetry  
+- [ ] Automatic load cell calibration routine  
+- [ ] Integrated pressure and flow sensor support  
+- [ ] Cross-platform **Electron Dashboard App**  
 
- Automatic load cell calibration
+---
 
- Integrated pressure & flow sensors
+<h2 align="center">👨‍💻 Contributing</h2>
 
- Cross-platform dashboard (Electron app)
+We welcome contributions from the community!
 
-👨‍💻 Contributing
-Pull requests are welcome!
-Please follow these steps:
+**How to contribute:**
+1. **Fork** this repository  
+2. Create a new branch → `feature/your-feature-name`  
+3. Commit your changes with **clear, descriptive messages**  
+4. Open a **Pull Request** against the `main` branch  
 
-Fork the repository
+---
 
-Create a new branch (feature/your-feature)
+<h2 align="center">🧾 License</h2>
 
-Commit changes with descriptive messages
+This project is licensed under the **MIT License**.  
+See the [LICENSE](./LICENSE) file for full details.
 
-Open a PR against main
+---
 
-🧾 License
-Distributed under the MIT License.
-See the LICENSE file for more information.
+<p align="center">
+  Developed with ❤️ by <b>Lian</b> <br>
+  <sub>Firmware • Embedded Systems • Rocket Telemetry Enthusiast</sub>
+</p>
 
-<p align="center"> Developed with ❤️ by <b>Lian</b> <br> <sub>Firmware • Embedded Systems • Rocket Telemetry Enthusiast</sub> </p> ```
+---
