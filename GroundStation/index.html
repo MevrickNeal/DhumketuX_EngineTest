@@ -6,11 +6,13 @@
     <title>DhumketuX Engine Test System</title>
     <link rel="stylesheet" href="style.css"> 
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
 </head>
 <body>
     <header>
         <div class="logo-placeholder">
             <img src="dhumketux_logo.png" alt="DhumketuX Logo" width="150">
+            <h1>DhumketuX Engine Test System</h1>
         </div>
     </header>
 
@@ -18,25 +20,34 @@
         <div class="panel webcam-panel">
             <h3>Live Feed</h3>
             <video id="webcam-feed" autoplay></video>
-            <p id="status-display">STATUS: DISCONNECTED</p>
+            <div id="status-display-box">
+                STATUS: **DISCONNECTED**
+            </div>
         </div>
 
         <div class="panel graph-panel">
             <div class="graph-header">
                 <h3>Thrust Data (Newtons)</h3>
-                <button id="saveDataBtn">💾 Save Data (CSV)</button>
+                <button id="saveDataBtn" class="primary-btn">💾 Save Data (CSV)</button>
             </div>
             <canvas id="thrustChart"></canvas>
         </div>
     </main>
 
     <div class="control-panel">
-        <button id="connectBtn" class="primary-btn">🔌 Connect to Arduino</button>
-        <button id="launchBtn" class="action-btn launch-btn" disabled>🚀 Launch (30s Countdown)</button>
-        <button id="testBtn" class="action-btn test-btn" disabled>🔥 Test (Direct Fire)</button>
-        <div id="countdown-timer" class="timer-display">ARMED</div>
-    </div>
+        <button id="connectBtn" class="action-btn connect-btn">1. CONNECT GROUND STATION</button>
+        
+        <div class="command-controls">
+            <button id="safeBtn" class="control-btn safe-btn" disabled>DISARM / SAFE ('S')</button>
+            <button id="armBtn" class="control-btn arm-btn" disabled>ARM SYSTEM ('A')</button>
+        </div>
 
+        <div class="fire-controls">
+            <button id="testBtn" class="control-btn test-btn" disabled>TEST FIRE ('T')</button>
+            <button id="launchBtn" class="control-btn launch-btn" disabled>LAUNCH ('I')</button>
+        </div>
+    </div>
+    
     <script src="script.js"></script>
 </body>
 </html>
