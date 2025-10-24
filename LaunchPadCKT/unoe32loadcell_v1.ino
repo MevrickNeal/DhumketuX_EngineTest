@@ -13,17 +13,18 @@
 // LoRa Control Pins
 #define PIN_M0 8    
 #define PIN_M1 9    
-#define PIN_AUX 7 
+#define PIN_AUX 7 // AUX pin is defined for constructor compatibility
 const int LORA_RX_PIN = 10; 
 const int LORA_TX_PIN = 11; 
 const long LORA_BAUD = 9600; 
 
 SoftwareSerial LoRaSerial(LORA_RX_PIN, LORA_TX_PIN); 
 
-// FIX: Constructor requires the AUX pin, M0, and M1 pins when passing SoftwareSerial pointer
+// FIX: Constructor uses all four control pins (AUX, M0, M1) plus the SoftwareSerial pointer.
+// Signature: LoRa_E32(SoftwareSerial* serial, byte auxPin, byte m0Pin, byte m1Pin, UART_BPS_RATE bpsRate)
 LoRa_E32 Transceiver(&LoRaSerial, PIN_AUX, PIN_M0, PIN_M1); 
 
-// Load Cell, DHT22, Control Pins (Unchanged)
+// Load Cell, DHT22, Control Pins (D6 is still used by DHT)
 const int LOADCELL_DOUT_PIN = 3; 
 const int LOADCELL_SCK_PIN = 2;  
 const long CALIBRATION_FACTOR = 456000; 
@@ -70,12 +71,12 @@ void setup() {
   // Initialize LoRa E32 Pins
   pinMode(PIN_M0, OUTPUT);
   pinMode(PIN_M1, OUTPUT);
-  pinMode(PIN_AUX, INPUT);
+  pinMode(PIN_AUX, INPUT); // AUX pin is now defined and set as input for stability
   
   // 1. Initialize E32 Transceiver
   LoRaSerial.begin(LORA_BAUD);
   
-  // FIX: Use Transceiver.begin() for initialization only (returns void or bool)
+  // Transceiver.begin() uses the software serial and M0/M1 pins.
   Transceiver.begin(); 
   Serial.println("LoRa Transceiver Initialized.");
 
@@ -91,14 +92,10 @@ void setup() {
   } 
   
   // Explicitly set the desired parameters using raw binary/hex values (FINAL FIX)
-  // Air Data Rate: 2.4 kbps (0b010)
-  config.SPED.airDataRate = 0b010; 
-  // Transmission Power: 17 dBm (0b01)
-  config.OPTION.transmissionPower = 0b01; 
-  // UART Parity: 8N1 (0b00)
-  config.SPED.uartParity = 0b00; 
+  config.SPED.airDataRate = 0b010;        // Air Data Rate: 2.4 kbps
+  config.OPTION.transmissionPower = 0b01;  // Transmission Power: 17 dBm 
+  config.SPED.uartParity = 0b00;           // UART Parity: 8N1 
   
-  // Set Fixed Transmission Mode and Addressing
   config.OPTION.fixedTransmission = FT_FIXED_TRANSMISSION; 
   config.ADDH = LP_ADDR_H; // Set module's own high address
   config.ADDL = LP_ADDR_L; // Set module's own low address
@@ -106,7 +103,7 @@ void setup() {
 
   
   // Save configuration permanently (0xC0 is the raw command for permanent save)
-  rs = Transceiver.setConfiguration(config, 0xC0); // WRITE_CFG_PWR_DWN_SAVE
+  rs = Transceiver.setConfiguration(config, WRITE_CFG_PWR_DWN_SAVE); 
 
   Serial.print("LoRa Config Set Status: ");
   Serial.println(rs.getResponseDescription());
@@ -130,6 +127,7 @@ void setup() {
 
 void loop() {
   // --- 1. HANDLE INCOMING COMMANDS ---
+  // Note: Commands sent from GS are currently simple characters relayed via LoRaSerial
   if (LoRaSerial.available()) {
     char command = LoRaSerial.read();
     executeCommand(command);
@@ -143,7 +141,7 @@ void loop() {
 }
 
 // -------------------------------------------------------------------
-// --- COMMAND EXECUTION FUNCTIONS (SAME AS BEFORE) ---
+// --- COMMAND EXECUTION FUNCTIONS ---
 // -------------------------------------------------------------------
 
 void executeCommand(char cmd) {
@@ -177,8 +175,8 @@ void executeCommand(char cmd) {
 
     case 'I': 
       if (isArmed) {
-        Serial.println("!!! LAUNCH SEQUENCE INITIATED !!!");
         digitalWrite(RELAY_PIN, HIGH);
+        Serial.println("!!! LAUNCH SEQUENCE INITIATED !!!");
         Serial.println("IGNITION ON.");
       } else {
         Serial.println("IGNITION BLOCKED: Not ARMED.");
@@ -198,7 +196,7 @@ void setArmedPosition() {
 }
 
 // -------------------------------------------------------------------
-// --- TELEMETRY FUNCTIONS (SAME AS BEFORE) ---
+// --- TELEMETRY FUNCTIONS ---
 // -------------------------------------------------------------------
 
 void readSensors() {
