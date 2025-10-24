@@ -220,11 +220,10 @@
             width: 95%;
             max-width: 1400px;
             display: grid;
-            grid-template-columns: 1fr 1.5fr 2fr 1.5fr 1fr; /* Connect | Safety | Launch (Center) | Test | Save (Moved) */
+            grid-template-columns: 1fr 1.5fr 2fr 1.5fr 1fr; 
             gap: 15px;
         }
         .control-panel .command-section:nth-child(3) {
-            /* Center launch button span */
             grid-column: 3 / span 1; 
         }
 
@@ -238,7 +237,7 @@
         /* Buttons (PROFESSIONAL TACTICAL LOOK) */
         .action-btn, .control-btn {
             padding: 14px 22px; 
-            border-radius: 8px; /* Slightly rounder for a cleaner panel look */
+            border-radius: 8px; 
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5); 
             transition: all 0.1s ease-out;
             font-family: 'Inter', sans-serif;
@@ -254,14 +253,18 @@
             transform: translateY(-1px);
         }
         
-        /* Non-critical buttons are Monochromatic/Glassy */
-        .connect-btn, .safe-btn, .arm-btn {
+        /* Monochromatic/Glassy Style for all non-critical buttons */
+        .connect-btn, .safe-btn, .arm-btn, .data-btn {
              background-color: var(--color-panel);
              color: var(--color-text);
+             /* Ensure they use the standard border for consistency */
+             border-color: var(--color-panel-border); 
         }
-        .connect-btn { border-color: var(--color-accent); }
-        .safe-btn { border-color: #00CC66; color: #00CC66; } 
-        .arm-btn { border-color: #FFD700; color: #FFD700; } 
+        /* Override specific buttons with unique colors for visual status/focus */
+        .connect-btn { border-color: var(--color-accent); } 
+        .safe-btn { color: #00CC66; border-color: #00CC66; } /* Green text for Safe */
+        .arm-btn { color: #FFD700; border-color: #FFD700; } /* Yellow text for Arm */
+        .data-btn { border-color: var(--color-accent); color: var(--color-accent); } /* Blue accent on Save Data */
         
         /* Special Styling for Center Launch Button (PRIMARY FOCUS) */
         #launchBtn {
@@ -284,8 +287,6 @@
             border: 1px solid #FF8C00;
         }
 
-        /* Save Data (Now in Metrics Header) */
-        .data-btn { background-color: var(--color-accent); color: #111; font-weight: 700; }
         
         .action-btn:disabled, .control-btn:disabled {
             opacity: 0.4;
