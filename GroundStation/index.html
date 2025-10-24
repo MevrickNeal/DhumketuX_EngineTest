@@ -196,6 +196,45 @@
         #thrustChart {
             flex-grow: 1;
         }
+
+        /* --- Custom Modal Styling for Password --- */
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed;
+            z-index: 100;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(5px);
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: rgba(255, 255, 255, 0.1);
+            margin: auto;
+            padding: 30px;
+            border: 1px solid #00BFFF;
+            width: 80%;
+            max-width: 400px;
+            border-radius: 12px;
+            box-shadow: 0 0 20px rgba(0, 191, 255, 0.6);
+            text-align: center;
+        }
+
+        .modal-content input[type="password"] {
+            width: 90%;
+            padding: 10px;
+            margin: 10px 0 20px 0;
+            border: 1px solid #00BFFF;
+            background: #000;
+            color: white;
+            border-radius: 4px;
+            font-size: 1.2em;
+        }
     </style>
 </head>
 <body>
@@ -265,18 +304,32 @@
         </div>
 
         <div class="fire-controls">
+            <!-- Buttons now call the password prompt function -->
             <button id="testBtn" class="control-btn test-btn" disabled>TEST FIRE ('T')</button>
             <button id="launchBtn" class="control-btn launch-btn" disabled>LAUNCH (30s Countdown)</button>
         </div>
     </div>
     
+    <!-- Custom Modal for Password Input -->
+    <div id="passwordModal" class="modal">
+        <div class="modal-content">
+            <h3 style="color: #FFD700;">CONFIRM EXECUTION</h3>
+            <p>Enter the launch authorization password (Default: 2026):</p>
+            <input type="password" id="passwordInput" placeholder="2026">
+            <button id="confirmExecuteBtn" class="action-btn launch-btn">Execute Command</button>
+            <button id="cancelExecuteBtn" class="action-btn safe-btn" style="margin-left: 10px;">Cancel</button>
+            <p id="passwordError" style="color: #FF3366; margin-top: 10px; display: none;">Invalid Password.</p>
+        </div>
+    </div>
+
     <script>
         // --- GLOBAL VARIABLES ---
-        let port; // The serial port object
+        let port; 
         let reader; 
         let outputStream; 
         let chart;
-        let isArmed = false; // Simple software safety state
+        let isArmed = false; 
+        let commandToExecute = null; // Stores 'LAUNCH' or 'TEST' command while modal is open
 
         // Data storage for charting and CSV export
         let telemetryData = []; 
@@ -287,6 +340,9 @@
         let maxThrustValue = 0.0;
         let ignitionTime_ms = null;
         let peakThrustTime_ms = null;
+        
+        const DEFAULT_PASSWORD = '2026';
+        const TEST_FIRE_DELAY_MS = 300; // New delay for Test Fire command
 
         // UI Elements
         const connectBtn = document.getElementById('connectBtn');
@@ -297,15 +353,20 @@
         const testBtn = document.getElementById('testBtn');
         const launchBtn = document.getElementById('launchBtn');
         const webcamFeed = document.getElementById('webcam-feed');
-        const countdownDisplay = document.getElementById('countdownDisplay'); // New Element
+        const countdownDisplay = document.getElementById('countdownDisplay');
         
         const maxThrustDisplay = document.getElementById('maxThrust');
         const ignitionTimeDisplay = document.getElementById('ignitionTime');
         const timeToPeakDisplay = document.getElementById('timeToPeak');
 
-        const currentTempDisplay = document.getElementById('currentTemp'); // New Element
-        const currentHumiDisplay = document.getElementById('currentHumi'); // New Element
+        const currentTempDisplay = document.getElementById('currentTemp');
+        const currentHumiDisplay = document.getElementById('currentHumi');
 
+        const passwordModal = document.getElementById('passwordModal');
+        const passwordInput = document.getElementById('passwordInput');
+        const confirmExecuteBtn = document.getElementById('confirmExecuteBtn');
+        const cancelExecuteBtn = document.getElementById('cancelExecuteBtn');
+        const passwordError = document.getElementById('passwordError');
 
         const COMMANDS = {
             ARM: 'A',
@@ -333,11 +394,56 @@
             saveDataBtn.addEventListener('click', saveCSV);
             armBtn.addEventListener('click', () => sendCommand(COMMANDS.ARM));
             safeBtn.addEventListener('click', () => sendCommand(COMMANDS.SAFE));
-            testBtn.addEventListener('click', () => sendCommand(COMMANDS.TEST));
-            launchBtn.addEventListener('click', handleLaunchCountdown);
+            
+            // Fire/Launch buttons now trigger the password prompt
+            testBtn.addEventListener('click', () => promptForPassword(COMMANDS.TEST));
+            launchBtn.addEventListener('click', () => promptForPassword(COMMANDS.LAUNCH));
+            
+            // Modal events
+            confirmExecuteBtn.addEventListener('click', authorizeAndExecute);
+            cancelExecuteBtn.addEventListener('click', hidePasswordModal);
+            passwordInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    authorizeAndExecute();
+                }
+            });
         }
 
-        // --- 1. WEB SERIAL API CONNECTION ---
+        // --- PASSWORD MODAL FUNCTIONS ---
+
+        function promptForPassword(command) {
+            if (!isArmed) { 
+                 statusDisplayBox.textContent += '\nWARNING: Please ARM the system first before firing.';
+                 return;
+            }
+            if (launchBtn.disabled && command === COMMANDS.LAUNCH) return; // Prevent double launch
+
+            commandToExecute = command;
+            passwordInput.value = '';
+            passwordError.style.display = 'none';
+            passwordModal.style.display = 'flex';
+            passwordInput.focus();
+        }
+
+        function hidePasswordModal() {
+            commandToExecute = null;
+            passwordModal.style.display = 'none';
+        }
+
+        function authorizeAndExecute() {
+            if (passwordInput.value === DEFAULT_PASSWORD) {
+                hidePasswordModal();
+                if (commandToExecute === COMMANDS.LAUNCH) {
+                    handleLaunchCountdown();
+                } else if (commandToExecute === COMMANDS.TEST) {
+                    handleTestFire();
+                }
+            } else {
+                passwordError.style.display = 'block';
+            }
+        }
+
+        // --- 1. WEB SERIAL API CONNECTION (No Changes) ---
         async function connectSerial() {
             if (!('serial' in navigator)) {
                 statusDisplayBox.textContent = 'STATUS: ERROR - Web Serial API not supported in this browser.';
@@ -393,10 +499,9 @@
             }
         }
 
-        // --- 2. DATA PROCESSING & CHARTING ---
+        // --- 2. DATA PROCESSING & CHARTING (No Changes) ---
 
         function processTelemetry(dataLine) {
-            // Expected Format from Arduino: "Thrust:XX.XX,Temp:YY.Y,Humi:ZZ.Z"
             const parts = dataLine.split(',');
             let dataPoint = { thrust: null, temp: null, humi: null };
 
@@ -414,11 +519,9 @@
                 const now = new Date();
                 const timeStamp = now.toLocaleTimeString('en-US');
 
-                // --- Detection Logic ---
                 detectIgnition(dataPoint.thrust, now.getTime());
                 detectPeakThrust(dataPoint.thrust, now.getTime());
 
-                // --- Store Data ---
                 telemetryData.push({ 
                     time: timeStamp, 
                     thrust: dataPoint.thrust, 
@@ -430,13 +533,11 @@
                 timeLabels.push(timeStamp);
                 thrustValues.push(dataPoint.thrust);
 
-                // --- Left-to-Right Sliding Window ---
                 if (timeLabels.length > MAX_POINTS) {
                     timeLabels.shift();
                     thrustValues.shift();
                 }
 
-                // --- Update Chart ---
                 if (chart) {
                     chart.data.labels = timeLabels;
                     chart.data.datasets[0].data = thrustValues;
@@ -444,9 +545,7 @@
                 }
             }
 
-            // --- Update Status Display ---
             if (dataPoint.temp !== null && dataPoint.humi !== null) {
-                 // Update dedicated Temp/Humi monitor (Top Right)
                 currentTempDisplay.textContent = `${dataPoint.temp.toFixed(1)} °C`;
                 currentHumiDisplay.textContent = `${dataPoint.humi.toFixed(1)} %`;
             }
@@ -461,7 +560,7 @@
                     datasets: [{
                         label: 'Real-Time Thrust (N)',
                         data: thrustValues,
-                        borderColor: '#00BFFF', // Electric Blue line
+                        borderColor: '#00BFFF',
                         borderWidth: 2,
                         pointRadius: 0,
                         fill: false,
@@ -492,7 +591,7 @@
             });
         }
         
-        // --- 3. IGNITION AND PEAK DETECTION ---
+        // --- 3. IGNITION AND PEAK DETECTION (No Changes) ---
         
         function detectIgnition(currentThrust, currentTimeMs) {
             if (ignitionTime_ms === null && currentThrust > IGNITION_THRESHOLD) {
@@ -523,7 +622,7 @@
             }
         }
 
-        // --- 4. COMMAND TRANSMISSION & COUNTDOWN ---
+        // --- 4. COMMAND TRANSMISSION & EXECUTION ---
 
         async function sendCommand(command) {
             if (!port || !outputStream) {
@@ -556,14 +655,30 @@
             }
         }
         
-        function handleLaunchCountdown() {
-            if (launchBtn.disabled) return; 
-            
-            if (!isArmed) { 
-                 statusDisplayBox.textContent += '\nWARNING: Please ARM the system first.';
-                 return;
-            }
+        // Function for Direct Test Fire (New delay implemented)
+        function handleTestFire() {
+            // Disable launch buttons during the brief test
+            testBtn.disabled = true;
+            launchBtn.disabled = true;
 
+            countdownDisplay.textContent = 'TEST FIRE PULSE...';
+            countdownDisplay.style.color = '#FF8C00';
+
+            // Send 'T' command
+            sendCommand(COMMANDS.TEST);
+
+            // Wait for 300 milliseconds (the new delay) before re-enabling
+            setTimeout(() => {
+                testBtn.disabled = false;
+                launchBtn.disabled = false;
+                countdownDisplay.textContent = 'ARMED / READY';
+                countdownDisplay.style.color = '#00BFFF';
+                statusDisplayBox.textContent += `\nTEST FIRE COMPLETE. System re-armed.`;
+            }, TEST_FIRE_DELAY_MS);
+        }
+
+        // Function for 30s Countdown (No change to timing)
+        function handleLaunchCountdown() {
             let countdown = 30;
             launchBtn.disabled = true;
             testBtn.disabled = true;
@@ -585,7 +700,7 @@
             }, 1000);
         }
 
-        // --- 5. UTILITIES ---
+        // --- 5. UTILITIES (No Changes) ---
 
         function initWebcam() {
             if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
