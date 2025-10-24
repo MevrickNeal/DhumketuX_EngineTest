@@ -65,160 +65,91 @@ It features two wirelessly linked subsystems communicating via **LoRa**:
 
 Install via **Arduino Library Manager**:
 
-```text
-HX711
-DHT sensor library (by Adafruit)
-Adafruit Unified Sensor
-SoftwareSerial (built-in)
-Servo (built-in)
+<h2 align="center">🧠 Arduino Dependencies</h2>
+
+Install the following via **Arduino Library Manager**:
+
+- HX711  
+- DHT sensor library (by Adafruit)  
+- Adafruit Unified Sensor  
+- SoftwareSerial *(built-in)*  
+- Servo *(built-in)*  
+
 Each subsystem has independent firmware:
 
 /LaunchPad/LaunchPad_Tx_D13.ino
-
 /GroundStation/GroundStation_Receiver.ino
 
-🌐 Ground Station Web UI
-A Web Serial API–based dashboard for real-time monitoring and control.
-
-Tech Stack:
-
-HTML5 + CSS3 + JavaScript
-
-Chart.js – Live thrust graph
-
-FileSaver.js – CSV data export
-
-Glassmorphic responsive design
-
-UI Files:
-
-bash
+yaml
 Copy code
+
+---
+
+<h2 align="center">🌐 Ground Station Web UI</h2>
+
+A **Web Serial API–based dashboard** for real-time monitoring and control.
+
+**Tech Stack**
+- HTML5 + CSS3 + JavaScript  
+- Chart.js → Live thrust visualization  
+- FileSaver.js → CSV data export  
+- Glassmorphic, responsive design  
+
+**UI Files**
 /web-ui/
 ├── index.html
 ├── style.css
 └── script.js
-📡 Communication Protocol
-🔁 Telemetry (LP → GS)
-Data transmitted every 100 ms as a comma-separated, newline-terminated string:
 
-ruby
+yaml
 Copy code
+
+---
+
+<h2 align="center">📡 Communication Protocol</h2>
+
+**Telemetry (LP → GS)**  
+Data transmitted every 100 ms as a comma-separated string:
 Thrust:XX.XX,Temp:YY.Y,Humi:ZZ.Z
-Field	Description	Unit
-XX.XX	Thrust	N
-YY.Y	Temperature	°C
-ZZ.Z	Humidity	%RH
 
-🧭 Control Commands (GS → LP)
-Action	Command	Response	Safety State
-Arm System	'A'	Servo → 170°	🔒 Armed
-Test Fire	'T'	Relay ON (50 ms pulse)	Armed
-Launch Fire	'I'	Relay ON (continuous)	Armed
-Disarm / Safe	'S'	Servo → 10°	🟢 Safe
-
-🧩 Repository Structure
-pgsql
+yaml
 Copy code
+
+| Field | Description | Unit |
+|--------|--------------|------|
+| XX.XX | Thrust | N |
+| YY.Y | Temperature | °C |
+| ZZ.Z | Humidity | %RH |
+
+---
+
+**Control Commands (GS → LP)**
+
+| Action | Command | Response | State |
+|--------|----------|-----------|--------|
+| Arm System | `'A'` | Servo → 170° | 🔒 Armed |
+| Test Fire | `'T'` | Relay ON (50 ms) | Armed |
+| Launch Fire | `'I'` | Relay ON (Continuous) | Armed |
+| Disarm / Safe | `'S'` | Servo → 10° | 🟢 Safe |
+
+---
+
+<h2 align="center">🧩 Repository Structure</h2>
+
 DhumketuX_DETS/
 ├── LaunchPad/
-│   └── LaunchPad_Tx_D13.ino
+│ └── LaunchPad_Tx_D13.ino
 ├── GroundStation/
-│   └── GroundStation_Receiver.ino
+│ └── GroundStation_Receiver.ino
 ├── web-ui/
-│   ├── index.html
-│   ├── style.css
-│   └── script.js
+│ ├── index.html
+│ ├── style.css
+│ └── script.js
 ├── docs/
-│   └── calibration_guide.md
+│ └── calibration_guide.md
 └── README.md
+
+yaml
+Copy code
 ---
 
-<h2 align="center">🔧 Setup & Operation Guide</h2>
-
-### ⚙️ 1️⃣ Configure Hardware
-
-1. Ensure both **LoRa E32** modules share identical parameters:
-   - **Baud Rate:** `9600 bps`  
-   - **Channel:** Same for both modules  
-   - **Air Data Rate:** Same configuration on both ends  
-
-2. Calibrate the **Load Cell** using the HX711 calibration sketch.  
-   - Update the `CALIBRATION_FACTOR` value inside the Launch Pad firmware.  
-
----
-
-### 💾 2️⃣ Upload Firmware
-
-| Unit | File | Board | Port |
-|------|------|--------|------|
-| **Launch Pad** | `LaunchPad_Tx_D13.ino` | Arduino Uno | COMx |
-| **Ground Station** | `GroundStation_Receiver.ino` | Arduino Uno | COMy |
-
-> Upload each sketch separately using the **Arduino IDE**.
-
----
-
-### 🖥️ 3️⃣ Run Ground Station UI
-
-1. Open `index.html` in **Google Chrome** or **Microsoft Edge**.  
-2. Click **“CONNECT GROUND STATION”** and select the correct serial port.  
-3. Observe **live telemetry data** in the dashboard (Thrust, Temperature, Humidity).  
-4. Operate in this recommended sequence:
-
-   | Action | Command | Description |
-   |--------|----------|-------------|
-   | 🔒 **ARM SYSTEM** | `'A'` | Enables safety servo and prepares ignition |
-   | ⚡ **TEST FIRE** | `'T'` | Sends a short ignition pulse (50 ms) |
-   | 🚀 **LAUNCH FIRE** | `'I'` | Activates ignition continuously |
-   | 🟢 **DISARM / SAFE** | `'S'` | Returns servo to safe state |
-
-5. After the test, click **💾 “Save Data (CSV)”** to export all telemetry logs.
-
----
-
-<h2 align="center">🧠 Safety Guidelines</h2>
-
-- Perform tests **outdoors** in a secure, controlled area.  
-- Keep all personnel **clear of the exhaust or blast radius**.  
-- Always **DISARM** the system when idle or before handling the igniter.  
-- Verify **servo interlock** before sending any fire command.  
-- Use **separate power lines** for ignition and logic control to prevent interference.
-
----
-
-<h2 align="center">🚀 Future Roadmap</h2>
-
-✅ Planned Upgrades and Features:
-- [ ] MQTT / WebSocket–based cloud telemetry  
-- [ ] Automatic load cell calibration routine  
-- [ ] Integrated pressure and flow sensor support  
-- [ ] Cross-platform **Electron Dashboard App**  
-
----
-
-<h2 align="center">👨‍💻 Contributing</h2>
-
-We welcome contributions from the community!
-
-**How to contribute:**
-1. **Fork** this repository  
-2. Create a new branch → `feature/your-feature-name`  
-3. Commit your changes with **clear, descriptive messages**  
-4. Open a **Pull Request** against the `main` branch  
-
----
-
-<h2 align="center">🧾 License</h2>
-
-This project is licensed under the **MIT License**.  
-See the [LICENSE](./LICENSE) file for full details.
-
----
-
-<p align="center">
-  Developed with ❤️ by <b>Lian</b> <br>
-  <sub>Firmware • Embedded Systems • Rocket Telemetry Enthusiast</sub>
-</p>
-
----
