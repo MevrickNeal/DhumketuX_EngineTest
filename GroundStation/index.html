@@ -4,36 +4,258 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DhumketuX Engine Test System</title>
-    <link rel="stylesheet" href="style.css"> 
+    <!-- Chart.js for real-time graphing -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
+    <!-- FileSaver.js for easy CSV download -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <style>
+        /* Reverted to Dark Glassy Theme */
+        body {
+            background: linear-gradient(135deg, #1f2733 0%, #0d121c 100%);
+            color: #E0E0E0;
+            font-family: 'Inter', sans-serif; /* Professional Sans-serif */
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        /* --- Glassy UI Panel Styles --- */
+        .panel, .control-panel, .metrics-header {
+            background: rgba(255, 255, 255, 0.08); /* Semi-transparent white */
+            backdrop-filter: blur(15px); /* Frosted Glass Effect */
+            border: 1px solid rgba(0, 191, 255, 0.2); /* Soft Blue Border */
+            border-radius: 12px; 
+            padding: 15px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5); /* Soft Shadow */
+            margin: 15px;
+        }
+
+        /* --- Top Header Layout (Logo, Timer, Temp/Humi) --- */
+        .top-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 95%;
+            max-width: 1600px;
+            padding: 10px 0;
+        }
+        
+        .logo-placeholder {
+            text-align: left;
+            flex-basis: 25%;
+            padding-left: 15px;
+        }
+
+        .countdown-container {
+            flex-basis: 50%;
+            text-align: center;
+        }
+
+        .temp-humi-monitor {
+            flex-basis: 25%;
+            text-align: right;
+            padding-right: 15px;
+        }
+
+        /* Countdown Timer Styling */
+        #countdownDisplay {
+            font-size: 2.8em;
+            font-weight: 700;
+            color: #00BFFF; /* Electric Blue for focus */
+            font-family: 'Courier New', monospace;
+            text-shadow: 0 0 10px rgba(0, 191, 255, 0.6);
+            padding: 10px 20px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            display: inline-block;
+        }
+
+        /* Temp/Humi Styling */
+        .temp-humi-data {
+            font-size: 1.1em;
+            font-family: 'Courier New', monospace;
+            line-height: 1.4;
+            color: #FFFFFF;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 8px;
+            border-radius: 6px;
+            display: inline-block;
+        }
+
+        /* Dashboard Grid Layout */
+        .dashboard-grid {
+            display: flex;
+            width: 95%;
+            max-width: 1600px;
+            flex-grow: 1;
+            min-height: 70vh; 
+        }
+
+        .webcam-panel {
+            flex: 1; 
+            min-width: 300px;
+            max-width: 400px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .graph-area {
+            flex: 3; 
+            display: flex;
+            flex-direction: column;
+        }
+
+        .graph-panel {
+            flex-grow: 1;
+            padding: 10px;
+            height: calc(100% - 70px);
+            display: flex;
+            flex-direction: column;
+            background: rgba(0, 0, 0, 0.7); /* Darker panel background for graph clarity */
+            border: 1px solid rgba(0, 191, 255, 0.3);
+        }
+
+        /* Real-Time Metrics Header (Top of Graph) */
+        .metrics-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 20px;
+            margin-bottom: 5px;
+            background: rgba(0, 0, 0, 0.4);
+        }
+        .metric-label {
+            color: #999;
+            font-weight: 300;
+            text-transform: uppercase;
+        }
+        .metric-value {
+            font-size: 1.6em; 
+            font-family: 'Courier New', monospace; 
+            color: #FFFFFF; 
+        }
+
+        /* Webcam and Status */
+        #webcam-feed {
+            width: 100%;
+            height: auto;
+            min-height: 200px;
+            border-radius: 8px;
+            background: #000;
+            border: 1px solid #00BFFF;
+        }
+        #status-display-box {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 6px;
+            background: rgba(0, 0, 0, 0.5);
+            font-family: 'Courier New', monospace; 
+            color: #00BFFF; 
+            font-size: 0.9em;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            text-align: left;
+            flex-grow: 1;
+            border: 1px solid rgba(0, 191, 255, 0.4);
+        }
+
+        /* Control Panel */
+        .control-panel {
+            gap: 25px;
+            width: 95%;
+            max-width: 1400px;
+        }
+
+        /* Buttons */
+        .action-btn, .control-btn {
+            padding: 12px 25px;
+            border-radius: 6px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+            transition: all 0.15s;
+            font-family: 'Inter', sans-serif;
+            font-weight: 600;
+            border: none;
+        }
+        /* Button Coloring (Blue/Black/White theme) */
+        .connect-btn { background-color: #00BFFF; color: #111; }
+        .safe-btn { background-color: #00CC66; color: white; } 
+        .arm-btn { background-color: #FFD700; color: #111; } 
+        .test-btn { background-color: #FF8C00; color: white; } 
+        .launch-btn { background-color: #FF3366; color: white; font-size: 1.1em; } 
+        
+        .action-btn:hover:not(:disabled), .control-btn:hover:not(:disabled) {
+            opacity: 0.9;
+            transform: scale(1.02);
+            box-shadow: 0 0 10px rgba(0, 191, 255, 0.6);
+        }
+
+        /* Chart Canvas Size */
+        #thrustChart {
+            flex-grow: 1;
+        }
+    </style>
 </head>
 <body>
-    <header>
+    <div class="top-header">
         <div class="logo-placeholder">
-            <img src="dhumketux_logo.png" alt="DhumketuX Logo" width="150">
-            <h1>DhumketuX Engine Test System</h1>
+            <img src="https://placehold.co/150x40/0d121c/00BFFF?text=DhumketuX" alt="DhumketuX Logo" width="150" style="border-radius:4px; border: 1px solid #00BFFF;">
         </div>
-    </header>
+
+        <!-- NEW: Countdown Timer (Top Center) -->
+        <div class="countdown-container">
+            <div id="countdownDisplay">ARMED / READY</div>
+        </div>
+
+        <!-- NEW: Temperature/Humidity Monitor (Top Right) -->
+        <div class="temp-humi-monitor">
+            <div class="temp-humi-data">
+                T: <span id="currentTemp">-- °C</span><br>
+                H: <span id="currentHumi">-- %</span>
+            </div>
+        </div>
+    </div>
 
     <main class="dashboard-grid">
+        <!-- LEFT PANEL: Webcam Feed & Status Log -->
         <div class="panel webcam-panel">
-            <h3>Live Feed</h3>
+            <h3>Live Pad Feed</h3>
             <video id="webcam-feed" autoplay></video>
+            <h3>Command Log</h3>
             <div id="status-display-box">
                 STATUS: **DISCONNECTED**
             </div>
         </div>
 
-        <div class="panel graph-panel">
-            <div class="graph-header">
-                <h3>Thrust Data (Newtons)</h3>
-                <button id="saveDataBtn" class="primary-btn">💾 Save Data (CSV)</button>
+        <!-- RIGHT PANEL: Graph and Metrics -->
+        <div class="graph-area">
+            <!-- Metrics Header (Timestamps & Peak Thrust) -->
+            <div class="metrics-header">
+                <div class="metric-item">
+                    <span class="metric-label">Max Thrust</span>
+                    <span class="metric-value" id="maxThrust">0.0 N</span>
+                </div>
+                <div class="metric-item">
+                    <span class="metric-label">Ignition Time</span>
+                    <span class="metric-value" id="ignitionTime">--:--:--</span>
+                </div>
+                <div class="metric-item">
+                    <span class="metric-label">Time to Peak</span>
+                    <span class="metric-value" id="timeToPeak">-- s</span>
+                </div>
+                <button id="saveDataBtn" class="action-btn connect-btn">💾 Save Data</button>
             </div>
-            <canvas id="thrustChart"></canvas>
+
+            <!-- Thrust Graph -->
+            <div class="panel graph-panel">
+                <canvas id="thrustChart"></canvas>
+            </div>
         </div>
     </main>
 
+    <!-- BOTTOM CENTER: Controls and Connection -->
     <div class="control-panel">
         <button id="connectBtn" class="action-btn connect-btn">1. CONNECT GROUND STATION</button>
         
@@ -44,10 +266,366 @@
 
         <div class="fire-controls">
             <button id="testBtn" class="control-btn test-btn" disabled>TEST FIRE ('T')</button>
-            <button id="launchBtn" class="control-btn launch-btn" disabled>LAUNCH ('I')</button>
+            <button id="launchBtn" class="control-btn launch-btn" disabled>LAUNCH (30s Countdown)</button>
         </div>
     </div>
     
-    <script src="script.js"></script>
+    <script>
+        // --- GLOBAL VARIABLES ---
+        let port; // The serial port object
+        let reader; 
+        let outputStream; 
+        let chart;
+        let isArmed = false; // Simple software safety state
+
+        // Data storage for charting and CSV export
+        let telemetryData = []; 
+        let timeLabels = [];
+        let thrustValues = [];
+
+        // Engine Test Metrics
+        let maxThrustValue = 0.0;
+        let ignitionTime_ms = null;
+        let peakThrustTime_ms = null;
+
+        // UI Elements
+        const connectBtn = document.getElementById('connectBtn');
+        const saveDataBtn = document.getElementById('saveDataBtn');
+        const statusDisplayBox = document.getElementById('status-display-box');
+        const armBtn = document.getElementById('armBtn');
+        const safeBtn = document.getElementById('safeBtn');
+        const testBtn = document.getElementById('testBtn');
+        const launchBtn = document.getElementById('launchBtn');
+        const webcamFeed = document.getElementById('webcam-feed');
+        const countdownDisplay = document.getElementById('countdownDisplay'); // New Element
+        
+        const maxThrustDisplay = document.getElementById('maxThrust');
+        const ignitionTimeDisplay = document.getElementById('ignitionTime');
+        const timeToPeakDisplay = document.getElementById('timeToPeak');
+
+        const currentTempDisplay = document.getElementById('currentTemp'); // New Element
+        const currentHumiDisplay = document.getElementById('currentHumi'); // New Element
+
+
+        const COMMANDS = {
+            ARM: 'A',
+            SAFE: 'S',
+            TEST: 'T',
+            LAUNCH: 'I'
+        };
+
+        const MAX_POINTS = 150; 
+        const IGNITION_THRESHOLD = 15; 
+        const NOISE_FLOOR = 5.0; 
+        
+        // --- INITIALIZATION ---
+        window.onload = init;
+
+        function init() {
+            initChart();
+            initWebcam();
+            initEventListeners();
+            statusDisplayBox.textContent = 'STATUS: DISCONNECTED\nWaiting for Web Serial Connection...';
+        }
+
+        function initEventListeners() {
+            connectBtn.addEventListener('click', connectSerial);
+            saveDataBtn.addEventListener('click', saveCSV);
+            armBtn.addEventListener('click', () => sendCommand(COMMANDS.ARM));
+            safeBtn.addEventListener('click', () => sendCommand(COMMANDS.SAFE));
+            testBtn.addEventListener('click', () => sendCommand(COMMANDS.TEST));
+            launchBtn.addEventListener('click', handleLaunchCountdown);
+        }
+
+        // --- 1. WEB SERIAL API CONNECTION ---
+        async function connectSerial() {
+            if (!('serial' in navigator)) {
+                statusDisplayBox.textContent = 'STATUS: ERROR - Web Serial API not supported in this browser.';
+                return;
+            }
+
+            try {
+                port = await navigator.serial.requestPort();
+                await port.open({ baudRate: 9600 }); 
+
+                statusDisplayBox.textContent = 'STATUS: CONNECTING...';
+                connectBtn.disabled = true;
+
+                // Enable command buttons
+                [armBtn, safeBtn, testBtn, launchBtn].forEach(btn => btn.disabled = false);
+                
+                const textDecoder = new TextDecoderStream();
+                port.readable.pipeTo(textDecoder.writable);
+                reader = textDecoder.readable.getReader();
+
+                const textEncoder = new TextEncoderStream();
+                textEncoder.readable.pipeTo(port.writable);
+                outputStream = textEncoder.writable;
+
+                readLoop();
+                statusDisplayBox.textContent = 'STATUS: CONNECTED\nListening for telemetry...';
+
+            } catch (error) {
+                console.error('Serial Connection Error:', error);
+                statusDisplayBox.textContent = `STATUS: ERROR - ${error.message}`;
+                connectBtn.disabled = false;
+            }
+        }
+
+        async function readLoop() {
+            while (true) {
+                try {
+                    const { value, done } = await reader.read();
+                    if (done) {
+                        console.log('Reader has been closed.');
+                        break;
+                    }
+                    if (value) {
+                        const lines = value.split('\n').filter(line => line.trim().length > 0);
+                        if (lines.length > 0) {
+                            processTelemetry(lines.pop().trim());
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error reading serial data:', error);
+                    break;
+                }
+            }
+        }
+
+        // --- 2. DATA PROCESSING & CHARTING ---
+
+        function processTelemetry(dataLine) {
+            // Expected Format from Arduino: "Thrust:XX.XX,Temp:YY.Y,Humi:ZZ.Z"
+            const parts = dataLine.split(',');
+            let dataPoint = { thrust: null, temp: null, humi: null };
+
+            parts.forEach(part => {
+                if (part.startsWith("Thrust:")) {
+                    dataPoint.thrust = parseFloat(part.replace('Thrust:', '').trim());
+                } else if (part.startsWith("Temp:")) {
+                    dataPoint.temp = parseFloat(part.replace('Temp:', '').trim());
+                } else if (part.startsWith("Humi:")) {
+                    dataPoint.humi = parseFloat(part.replace('Humi:', '').trim());
+                }
+            });
+
+            if (dataPoint.thrust !== null) {
+                const now = new Date();
+                const timeStamp = now.toLocaleTimeString('en-US');
+
+                // --- Detection Logic ---
+                detectIgnition(dataPoint.thrust, now.getTime());
+                detectPeakThrust(dataPoint.thrust, now.getTime());
+
+                // --- Store Data ---
+                telemetryData.push({ 
+                    time: timeStamp, 
+                    thrust: dataPoint.thrust, 
+                    temp: dataPoint.temp, 
+                    humi: dataPoint.humi,
+                    timestamp_ms: now.getTime()
+                });
+
+                timeLabels.push(timeStamp);
+                thrustValues.push(dataPoint.thrust);
+
+                // --- Left-to-Right Sliding Window ---
+                if (timeLabels.length > MAX_POINTS) {
+                    timeLabels.shift();
+                    thrustValues.shift();
+                }
+
+                // --- Update Chart ---
+                if (chart) {
+                    chart.data.labels = timeLabels;
+                    chart.data.datasets[0].data = thrustValues;
+                    chart.update('none'); 
+                }
+            }
+
+            // --- Update Status Display ---
+            if (dataPoint.temp !== null && dataPoint.humi !== null) {
+                 // Update dedicated Temp/Humi monitor (Top Right)
+                currentTempDisplay.textContent = `${dataPoint.temp.toFixed(1)} °C`;
+                currentHumiDisplay.textContent = `${dataPoint.humi.toFixed(1)} %`;
+            }
+        }
+
+        function initChart() {
+            const ctx = document.getElementById('thrustChart').getContext('2d');
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: timeLabels,
+                    datasets: [{
+                        label: 'Real-Time Thrust (N)',
+                        data: thrustValues,
+                        borderColor: '#00BFFF', // Electric Blue line
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        fill: false,
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: { display: true, text: 'Thrust (N)', color: '#00BFFF' },
+                            grid: { color: 'rgba(0, 191, 255, 0.1)' },
+                            ticks: { color: '#00BFFF' }
+                        },
+                        x: {
+                            title: { display: true, text: 'Time', color: '#00BFFF' },
+                            grid: { color: 'rgba(0, 191, 255, 0.1)' },
+                            ticks: { color: '#00BFFF' }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { mode: 'index', intersect: false }
+                    }
+                }
+            });
+        }
+        
+        // --- 3. IGNITION AND PEAK DETECTION ---
+        
+        function detectIgnition(currentThrust, currentTimeMs) {
+            if (ignitionTime_ms === null && currentThrust > IGNITION_THRESHOLD) {
+                const lastPoint = telemetryData[telemetryData.length - 1];
+                if (!lastPoint || lastPoint.thrust < NOISE_FLOOR) { 
+                    ignitionTime_ms = currentTimeMs;
+                    
+                    const timeString = new Date(ignitionTime_ms).toLocaleTimeString('en-US');
+                    ignitionTimeDisplay.textContent = timeString;
+                    ignitionTimeDisplay.style.color = '#FFD700'; 
+                }
+            }
+        }
+
+        function detectPeakThrust(currentThrust, currentTimeMs) {
+            if (currentThrust > maxThrustValue) {
+                maxThrustValue = currentThrust;
+                peakThrustTime_ms = currentTimeMs;
+                
+                maxThrustDisplay.textContent = `${maxThrustValue.toFixed(2)} N`;
+                maxThrustDisplay.style.color = '#FF3366'; 
+                
+                if (ignitionTime_ms !== null) {
+                    const ttp_s = (peakThrustTime_ms - ignitionTime_ms) / 1000;
+                    timeToPeakDisplay.textContent = `${ttp_s.toFixed(2)} s`;
+                    timeToPeakDisplay.style.color = '#FF3366';
+                }
+            }
+        }
+
+        // --- 4. COMMAND TRANSMISSION & COUNTDOWN ---
+
+        async function sendCommand(command) {
+            if (!port || !outputStream) {
+                statusDisplayBox.textContent = "STATUS: ERROR - Not connected. Click CONNECT.";
+                return;
+            }
+
+            try {
+                const writer = outputStream.getWriter();
+                await writer.write(command + '\n');
+                writer.releaseLock();
+                
+                statusDisplayBox.textContent += `\nCOMMAND SENT: ${command}`;
+
+                if (command === COMMANDS.ARM) {
+                    isArmed = true;
+                    statusDisplayBox.textContent += '\nSystem ARMED. Ready for Launch.';
+                    countdownDisplay.textContent = 'ARMED / READY';
+                    countdownDisplay.style.color = '#00BFFF';
+                } else if (command === COMMANDS.SAFE) {
+                    isArmed = false;
+                    statusDisplayBox.textContent += '\nSystem DISARMED. Safe Mode Engaged.';
+                    countdownDisplay.textContent = 'SAFE / DISARMED';
+                    countdownDisplay.style.color = '#00CC66';
+                }
+
+            } catch (error) {
+                console.error('Error sending command:', error);
+                statusDisplayBox.textContent += `\nERROR - Command send failed: ${error.message}`;
+            }
+        }
+        
+        function handleLaunchCountdown() {
+            if (launchBtn.disabled) return; 
+            
+            if (!isArmed) { 
+                 statusDisplayBox.textContent += '\nWARNING: Please ARM the system first.';
+                 return;
+            }
+
+            let countdown = 30;
+            launchBtn.disabled = true;
+            testBtn.disabled = true;
+
+            const countdownInterval = setInterval(() => {
+                if (countdown >= 0) {
+                    countdownDisplay.textContent = `T-${String(countdown).padStart(2, '0')}`;
+                    countdownDisplay.style.color = countdown <= 10 ? '#FF3366' : '#FFD700';
+                    countdown--;
+                } else {
+                    clearInterval(countdownInterval);
+                    countdownDisplay.textContent = 'IGNITION';
+                    countdownDisplay.style.color = '#FF3366';
+
+                    statusDisplayBox.textContent += `\nIGNITION COMMAND SENT!`;
+                    sendCommand(COMMANDS.LAUNCH);
+                    safeBtn.disabled = false; 
+                }
+            }, 1000);
+        }
+
+        // --- 5. UTILITIES ---
+
+        function initWebcam() {
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                navigator.mediaDevices.getUserMedia({ video: true })
+                    .then(stream => {
+                        webcamFeed.srcObject = stream;
+                    })
+                    .catch(err => {
+                        console.error("Webcam access denied or failed:", err);
+                        webcamFeed.outerHTML = '<div style="background:#222; color:#aaa; padding:50px; border-radius:8px; border: 1px solid #00BFFF;">WEBCAM ERROR: Feed unavailable.</div>';
+                    });
+            }
+        }
+
+        function saveCSV() {
+            if (telemetryData.length === 0) {
+                statusDisplayBox.textContent += "\nWARNING: No data collected yet!";
+                return;
+            }
+
+            let csv = `DhumketuX Engine Test Report\n`;
+            csv += `Max Thrust (N):,${maxThrustValue.toFixed(2)}\n`;
+            csv += `Ignition Time (Local):,${ignitionTime_ms !== null ? new Date(ignitionTime_ms).toLocaleTimeString('en-US') : 'N/A'}\n`;
+            if (ignitionTime_ms !== null) {
+                const ttp_s = (peakThrustTime_ms - ignitionTime_ms) / 1000;
+                csv += `Time to Peak (s):,${ttp_s.toFixed(2)}\n`;
+            } else {
+                 csv += `Time to Peak (s):,N/A\n`;
+            }
+            csv += "\nTime,Thrust (N),Temperature (°C),Humidity (%)\n";
+
+            telemetryData.forEach(row => {
+                csv += `${row.time},${row.thrust.toFixed(2)},${row.temp.toFixed(1)},${row.humi.toFixed(1)}\n`;
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+            saveAs(blob, `DhumketuX_Test_Data_${new Date().toISOString().replace(/[:.]/g, "-")}.csv`);
+            
+            statusDisplayBox.textContent += "\nDATA SAVED as CSV.";
+        }
+    </script>
 </body>
 </html>
