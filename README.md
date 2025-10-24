@@ -148,8 +148,6 @@ DhumketuX_DETS/
 ├── docs/
 │ └── calibration_guide.md
 └── README.md
+<h1 align="center">Made By Lian Mollick</h1>
 
-yaml
-Copy code
----
 
