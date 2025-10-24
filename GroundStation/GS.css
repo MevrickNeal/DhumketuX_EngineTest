@@ -1,0 +1,102 @@
+body {
+    background: linear-gradient(135deg, #1f2733 0%, #0d121c 100%);
+    color: #e0e0e0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+}
+
+/* Glass Effect Base */
+.panel, .control-panel {
+    background: rgba(255, 255, 255, 0.05); /* Semi-transparent white */
+    backdrop-filter: blur(10px); /* Frosted glass effect */
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 15px;
+    padding: 20px;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    margin: 10px;
+}
+
+/* Header/Logo */
+header {
+    width: 100%;
+    text-align: center;
+    padding: 20px 0 10px;
+}
+
+/* Dashboard Layout */
+.dashboard-grid {
+    display: flex;
+    width: 90%;
+    max-width: 1400px;
+    flex-grow: 1;
+}
+
+.webcam-panel {
+    flex: 1; /* Takes up 1 part */
+    min-width: 300px;
+}
+
+.graph-panel {
+    flex: 3; /* Takes up 3 parts, making it wider */
+}
+
+/* Control Panel */
+.control-panel {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 25px 50px;
+    margin-top: 10px;
+    margin-bottom: 20px;
+    gap: 30px;
+}
+
+/* Buttons */
+.primary-btn, .action-btn {
+    padding: 12px 25px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: all 0.2s;
+    text-transform: uppercase;
+}
+
+#connectBtn {
+    background-color: #007bff;
+    color: white;
+}
+
+.launch-btn {
+    background-color: #ff9800; /* Amber for caution/launch */
+}
+
+.test-btn {
+    background-color: #f44336; /* Red for direct fire */
+}
+
+.timer-display {
+    font-size: 2em;
+    font-weight: 700;
+    color: #4caf50; /* Green for Armed/Ready */
+}
+
+/* Webcam and Graph specific styling */
+#webcam-feed {
+    width: 100%;
+    height: auto;
+    border-radius: 10px;
+    background: #000;
+}
+
+.graph-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
