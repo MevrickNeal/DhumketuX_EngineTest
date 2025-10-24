@@ -1,7 +1,8 @@
+<p align="center">
+  <img width="252" height="80" alt="DhumketuX Logo" src="https://github.com/user-attachments/assets/447263ab-24ea-4f26-ab0a-907d59a87e52" />
+</p>
 
-  <img width="252" height="80" alt="dhumketux-logo-picv89pfmqg232dzle0szl8ygpq038fuxufww8t3pc" src="https://github.com/user-attachments/assets/447263ab-24ea-4f26-ab0a-907d59a87e52" />
-
-<h1>🚀 DhumketuX Engine Test System (DETS)</h1>
+<h1 align="center">🚀 DhumketuX Engine Test System (DETS)</h1>
 
 <p align="center">
   <b>Modular Bi-Directional Telemetry & Control Framework for Rocket Engine Static Testing</b>
