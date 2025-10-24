@@ -4,9 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DhumketuX Mission Control</title>
-    <!-- Chart.js for real-time graphing -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
-    <!-- FileSaver.js for easy CSV download -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     <style>
         /* Global Variables for Day/Night Mode */
@@ -188,7 +186,7 @@
         .metrics-header .action-btn { 
             font-size: 1.0em; 
             padding: 10px 15px; 
-            border-radius: 8px; /* Slightly rounder than control buttons */
+            border-radius: 8px; 
         }
 
         /* Webcam and Status */
@@ -219,16 +217,15 @@
         .control-panel {
             width: 95%;
             max-width: 1400px;
-            display: flex; /* Changed from grid to flex for better centering/organization */
+            display: flex; /* Changed to flex for precise grouping and centering */
             justify-content: center;
-            gap: 20px; /* Space between groups */
+            gap: 40px; /* Space between functional groups */
             padding: 20px;
         }
-        
-        /* Command Sections for grouping */
+
         .command-section {
             display: flex;
-            gap: 10px; /* Space between buttons */
+            gap: 15px; /* Space between buttons within a group */
             align-items: center;
             justify-content: center;
         }
@@ -244,8 +241,14 @@
             border: 1px solid var(--color-panel-border); 
             cursor: pointer;
             text-transform: uppercase;
+            /* Uniform Size Constraint */
+            width: 180px; 
+            text-align: center;
         }
-
+        
+        /* Overrides for special buttons that should NOT be fixed width */
+        #launchBtn { width: 250px; } 
+        
         /* Hover effect for feedback */
         .action-btn:not(:disabled):hover, .control-btn:not(:disabled):hover {
             box-shadow: 0 0 10px var(--color-accent);
@@ -253,16 +256,17 @@
         }
         
         /* Monochromatic/Glassy Style for all non-critical buttons */
-        .connect-btn, .safe-btn, .arm-btn, .data-btn {
+        .connect-btn, .safe-btn, .arm-btn {
              background-color: var(--color-panel);
              color: var(--color-text);
              border-color: var(--color-panel-border); 
         }
+        
         /* Override specific buttons with unique colors for visual status/focus */
         .connect-btn { border-color: var(--color-accent); } 
-        .safe-btn { color: #00CC66; border-color: #00CC66; } /* Green text for Safe */
-        .arm-btn { color: #FFD700; border-color: #FFD700; } /* Yellow text for Arm */
-        .data-btn { border-color: var(--color-accent); color: var(--color-accent); } /* Blue accent on Save Data */
+        .safe-btn { color: #00CC66; border-color: #00CC66; } 
+        .arm-btn { color: #FFD700; border-color: #FFD700; } 
+        .data-btn { border-color: var(--color-accent); color: var(--color-accent); }
         
         /* Special Styling for Center Launch Button (PRIMARY FOCUS) */
         #launchBtn {
@@ -323,7 +327,6 @@
     <div class="top-header">
         <div class="logo-placeholder">
             <img src="https://placehold.co/150x40/0d121c/00BFFF?text=DhumketuX" alt="DhumketuX Logo" width="150" style="border-radius:4px; border: 1px solid var(--color-accent);">
-            <!-- Status Indicators -->
             <div>
                 <span class="status-label">GS:</span>
                 <span id="gsStatusDot" class="status-dot" style="background-color: red;"></span>
@@ -332,15 +335,12 @@
             </div>
         </div>
 
-        <!-- Countdown Timer (Top Center) -->
         <div class="countdown-container">
             <div id="countdownDisplay">SAFE MODE</div>
         </div>
 
-        <!-- Temp/Humi Monitor (Top Right) -->
         <div class="temp-humi-monitor">
-             <!-- Day/Night Toggle Switch -->
-            <label class="toggle-switch">
+             <label class="toggle-switch">
                 <input type="checkbox" id="darkModeToggle" checked>
                 <span class="slider"></span>
             </label>
@@ -352,7 +352,6 @@
     </div>
 
     <main class="dashboard-grid">
-        <!-- LEFT PANEL: Webcam Feed & Status Log -->
         <div class="panel webcam-panel">
             <h3>Live Pad Feed</h3>
             <video id="webcam-feed" autoplay></video>
@@ -362,9 +361,7 @@
             </div>
         </div>
 
-        <!-- RIGHT PANEL: Graph and Metrics -->
         <div class="graph-area">
-            <!-- Metrics Header (Timestamps & Peak Thrust) -->
             <div class="metrics-header">
                 <div class="metric-item">
                     <span class="metric-label">Max Thrust</span>
@@ -378,38 +375,35 @@
                     <span class="metric-label">Time to Peak</span>
                     <span class="metric-value" id="timeToPeak">-- s</span>
                 </div>
-                <!-- SAVE DATA BUTTON MOVED HERE -->
                 <button id="saveDataBtn" class="action-btn data-btn">💾 SAVE DATA</button>
             </div>
 
-            <!-- Thrust Graph -->
             <div class="panel graph-panel">
                 <canvas id="thrustChart"></canvas>
             </div>
         </div>
     </main>
 
-    <!-- BOTTOM CENTER: Reorganized Controls -->
     <div class="control-panel">
-        <!-- Group 1: Connection -->
         <div class="command-section">
             <button id="connectBtn" class="action-btn connect-btn">1. CONNECT GS</button>
         </div>
         
-        <!-- Group 2: Safety/Arming -->
         <div class="command-section">
             <button id="safeBtn" class="control-btn safe-btn" disabled>DISARM / SAFE ('S')</button>
             <button id="armBtn" class="control-btn arm-btn" disabled>ARM SYSTEM ('A')</button>
         </div>
 
-        <!-- Group 3: Firing Control (Center) -->
         <div class="command-section">
             <button id="launchBtn" class="control-btn launch-btn" disabled>LAUNCH (T-30s)</button>
+        </div>
+
+        <div class="command-section">
             <button id="testBtn" class="control-btn test-btn" disabled>TEST FIRE (300ms)</button>
         </div>
-    </div>
+        
+        </div>
     
-    <!-- Custom Modal for Password Input -->
     <div id="passwordModal" class="modal">
         <div class="modal-content">
             <h3 style="color: #FFD700;">CONFIRM EXECUTION</h3>
