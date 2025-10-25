@@ -1,3 +1,4 @@
+````markdown
 <p align="center">
   <img width="252" height="80" alt="dhumketux-logo-picv89pfmqg232dzle0szl8ygpq038fuxufww8t3pc" src="https://github.com/user-attachments/assets/447263ab-24ea-4f26-ab0a-907d59a87e52" />
 </p>
@@ -113,3 +114,73 @@ typedef struct {
     float temperature_C;
     float humidity_perc;
 } Telemetry_t;
+````
+
+**Serialization:**
+The Ground Station receives this struct and converts it to a Web Dashboard-friendly string format:
+
+```
+Thrust:XX.XX,Temp:YY.Y,Humi:ZZ.Z
+```
+
+| Parameter   | Unit | Description                                   |
+| ----------- | ---- | --------------------------------------------- |
+| Thrust      | kPa  | Engine chamber pressure (converted to thrust) |
+| Temperature | °C   | Ambient or motor temperature                  |
+| Humidity    | %RH  | Relative humidity                             |
+
+---
+
+### 4.2. Control Commands (PC → GS → LP)
+
+| Command | Description      | Launch Pad Action                        |
+| ------- | ---------------- | ---------------------------------------- |
+| **A**   | Arm System       | Activates safety servo (arming position) |
+| **S**   | Safe System      | Returns servo to safe position           |
+| **T**   | Trigger Ignition | Relay ON (50 ms pulse)                   |
+| **I**   | System Info      | Sends status and sensor summary to GS    |
+
+---
+
+## 📁 Repository Structure
+
+```
+DhumketuX_DETS/
+├── GroundStation/
+│   ├── GS_Receiver.ino
+│   └── ...
+├── LaunchPad/
+│   ├── LP_Controller.ino
+│   └── ...
+├── WebDashboard/
+│   ├── index.html
+│   ├── app.js
+│   └── style.css
+├── docs/
+│   ├── schematics/
+│   └── wiring_diagrams/
+└── LICENSE
+```
+
+---
+
+## 🧠 Notes for Developers
+
+* Maintain **strict C-style coding** on microcontrollers for deterministic performance.
+* Avoid `String`, `malloc()`, or `new` in firmware code.
+* Web Dashboard communicates using standard **Web Serial API** (tested on Chrome 116+).
+* LoRa channels and sync words must be consistent between LP and GS.
+
+---
+
+## 🧾 License
+
+This project is licensed under the **MIT License**.
+See the [LICENSE](./LICENSE) file for full terms.
+
+---
+
+<p align="center">
+  <b>Made by Lian Mollick</b> 🚀
+</p>
+```
