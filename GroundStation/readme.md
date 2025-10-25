@@ -1,243 +1,115 @@
 <p align="center">
-  <img width="252" height="80" alt="DhumketuX Logo" src="https://github.com/user-attachments/assets/447263ab-24ea-4f26-ab0a-907d59a87e52" />
+  <img width="252" height="80" alt="dhumketux-logo-picv89pfmqg232dzle0szl8ygpq038fuxufww8t3pc" src="https://github.com/user-attachments/assets/447263ab-24ea-4f26-ab0a-907d59a87e52" />
 </p>
 
 <h1 align="center">🚀 DhumketuX Engine Test System (DETS)</h1>
 
 <p align="center">
-  <b>Modular Bi-Directional Telemetry & Control Framework for Rocket Engine Static Testing</b>
+  <b>Real-time rocket engine thrust test system integrating LoRa telemetry, web serial dashboard, and strict C-style embedded firmware.</b>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Microcontroller-Arduino%20Uno-blue?logo=arduino&style=flat-square">
-  <img src="https://www.google.com/search?q=https://img.shields.io/badge/Wireless-LoRa%2520RA--02-green%3Flogo%3Dwifi%26style%3Dflat-square">
-  <img src="https://img.shields.io/badge/UI-Web%20Serial%20Dashboard-orange?logo=javascript&style=flat-square">
-  <img src="https://img.shields.io/badge/License-MIT-lightgrey?style=flat-square">
+  <img src="https://img.shields.io/badge/Microcontroller-Arduino%20Uno-blue?logo=arduino" />
+  <img src="https://img.shields.io/badge/Wireless-LoRa%20RA--02-brightgreen?logo=wifi" />
+  <img src="https://img.shields.io/badge/UI-Web%20Serial%20Dashboard-orange?logo=googlechrome" />
+  <img src="https://img.shields.io/badge/License-MIT-lightgrey?logo=open-source-initiative" />
 </p>
 
-🌟 Overview
+---
 
-The DhumketuX Engine Test System (DETS) is a firmware-driven, modular telemetry and control framework built for safely monitoring, logging, and executing static fire tests of small-scale rocket propulsion units.
+## 🌍 Overview
 
-It features two wirelessly linked subsystems communicating via LoRa:
+**DhumketuX Engine Test System (DETS)** is a precision-engineered telemetry and control platform designed for **real-time static rocket engine testing**.  
+It enables wireless thrust data acquisition and ignition control via **LoRa RA-02** and a **Web Serial Dashboard**, ensuring safe, responsive, and reliable operation.
 
-🛰️ Ground Station (GS): Browser-based command and visualization dashboard.
+### ✨ Key Highlights
+- Dual-unit system: Launch Pad (LP) + Ground Station (GS)
+- LoRa-based wireless telemetry link
+- Real-time thrust, temperature, and humidity monitoring
+- Web Serial Dashboard visualization
+- Fully modular firmware with reproducible builds
+- **Strictly C-style programming on the MCU** (no `String` objects or dynamic memory allocation) for maximum reliability
 
-🔥 Launch Pad (LP): Real-time sensor acquisition and ignition control logic.
+---
 
-Key highlights
+## ⚙️ System Architecture & Pinout Specification
 
-Safe, two-step ignition arming system
+The system consists of two primary units:  
+🛰️ **Ground Station Unit (Receiver)** and 🔥 **Launch Pad Unit (Sensor & Control)**.
 
-Real-time thrust, temperature & humidity data
+Both are powered by Arduino Uno/Nano and communicate using **LoRa RA-02** modules.
 
-Strictly C-style programming on the MCU (no String objects)
+---
 
-CSV logging for research and analysis
+### 🛰️ Ground Station Unit (Receiver)
 
-Glass-style responsive web interface
+| Component        | Role              | Connection Details (Arduino Uno/Nano) |
+|------------------|-------------------|---------------------------------------|
+| **LoRa RA-02 Module** | SPI Slave Select (CS) | D10 |
+|                  | Reset (RST)        | D9  |
+|                  | DIO0 (Interrupt/IRQ) | D2 |
+|                  | SPI Clock (SCK)    | D13 |
+|                  | SPI Master Out (MOSI) | D11 |
+|                  | SPI Master In (MISO) | D12 |
+| **Status LED**   | Activity Indicator | D8  |
 
-⚙️ System Architecture
+---
 
-🛰️ Ground Station Unit (Receiver & UI Host)
+### 🔥 Launch Pad Unit (Sensor & Control)
 
-The GS firmware (GS_Receiver.ino) uses Hardware SPI for high-speed LoRa communication and acts as a reliable serial bridge.
+| Component        | Role                   | Connection Details (Arduino Uno/Nano) |
+|------------------|------------------------|---------------------------------------|
+| **LoRa Module**  | Control Transceiver    | D10, D9, D2 (Identical to GS) |
+| **HX711 Load Cell** | Thrust Measurement   | D2 (SCK), D3 (DOUT) |
+| **DHT22 Sensor** | Environmental Data     | D6 (DATA) |
+| **Ignition Relay** | Control Circuit       | D13 (Trigger) |
+| **Safety Servo** | Physical Arming        | D5 (PWM) |
 
-Component
+---
 
-Role
+## 🛠️ Setup and Installation (Failproof Guide)
 
-Connection Details (Arduino Uno/Nano)
+Follow this guide **exactly** to ensure successful and reproducible builds.
 
-Arduino Uno
+### 🧩 IDE and Board Manager Versions
 
-Microcontroller for LoRa reception & serial relay
+| Tool | Recommended Version |
+|------|----------------------|
+| **Arduino IDE** | v2.2.1 |
+| **Arduino AVR Boards** | v1.8.6 |
 
-Connected to PC via USB
+---
 
-LoRa RA-02 Module
+### 📚 Required Libraries
 
-Long-range telemetry link (Hardware SPI)
+| Library | Author | Version |
+|----------|--------|----------|
+| **LoRa** | Sandeep Mistry | v0.8.0 |
+| **HX711** | bogde | v1.2.3 |
+| **DHT sensor library** | Adafruit | v1.4.4 |
+| **Adafruit Unified Sensor** | Adafruit | v1.1.7 |
+| **Servo** | Arduino | Built-in |
 
-D10 → CS, D9 → RST, D2 → DIO0 (IRQ)
+---
 
-PC / Web UI Host
+### 🪛 Installation Summary
 
-Runs Chrome/Edge web dashboard
+1. Open **Arduino IDE v2.2.1** → Boards Manager → Install **Arduino AVR Boards v1.8.6**.  
+2. Go to **Library Manager** → Install each dependency **with the exact versions** listed above.  
+3. Connect both Arduinos (LP & GS) and upload respective `.ino` files from `/LaunchPad/` and `/GroundStation/`.
 
-Communicates via Web Serial API
+---
 
-🔥 Launch Pad Unit (Sensor & Control)
+## 📡 Communication Protocol Deep Dive
 
-Component
+### 4.1. Telemetry (LP → GS → PC)
 
-Role
+Telemetry data is transmitted using a **binary struct** for efficient bandwidth use.
 
-Connection Details
-
-Arduino Uno
-
-Core controller for sensor input & actuator control
-
-—
-
-LoRa Module
-
-Telemetry + command transceiver
-
-D10 → CS, D9 → RST, D2 → DIO0 (IRQ)
-
-HX711 Load Cell Amplifier
-
-Measures thrust
-
-D2 → SCK, D3 → DOUT
-
-DHT22 Sensor
-
-Measures temperature & humidity
-
-D6 → DATA
-
-Relay Module
-
-Ignition control circuit
-
-D13 → Trigger
-
-Servo Motor
-
-Physical safety arm mechanism
-
-D5 → PWM
-
-💻 Firmware & Software Stack
-
-🧠 Arduino Dependencies
-
-Install the following via Arduino Library Manager:
-
-LoRa (By Sandeep Mistry)
-
-SPI (built-in)
-
-HX711
-
-DHT sensor library (by Adafruit)
-
-Adafruit Unified Sensor
-
-Servo (built-in)
-
-Each subsystem has independent firmware:
-
-/LaunchPad/LaunchPad_Tx_D13.ino
-/GroundStation/GS_Receiver.ino
-
-
-<h2 align="center">🌐 Ground Station Web UI</h2>
-
-A Web Serial API–based dashboard for real-time monitoring and control.
-
-Tech Stack
-
-HTML5 + CSS3 + JavaScript
-
-Chart.js → Live thrust visualization
-
-FileSaver.js → CSV data export
-
-Glassmorphic, responsive design
-
-UI Files
-
-/web-ui/
-├── index.html
-├── style.css
-└── script.js
-
-
-<h2 align="center">📡 Communication Protocol</h2>
-
-Telemetry (LP $\rightarrow$ GS $\rightarrow$ PC)
-
-Data is transmitted from the Launch Pad as a binary struct (Telemetry_t) for efficiency. The Ground Station firmware immediately serializes this binary data into the following comma-separated string format for the Web Serial UI:
-
-Thrust:XX.XX,Temp:YY.Y,Humi:ZZ.Z
-
-
-Field
-
-Description
-
-Unit
-
-XX.XX
-
-Thrust
-
-kPa (Kilopascals)
-
-YY.Y
-
-Temperature
-
-°C
-
-ZZ.Z
-
-Humidity
-
-%RH
-
-Control Commands (PC $\rightarrow$ GS $\rightarrow$ LP)
-
-Commands are sent from the Web UI to the Ground Station as single characters over the USB Serial link. The GS immediately transmits the single character via LoRa to the Launch Pad.
-
-Action
-
-Command
-
-Target State
-
-Arm System
-
-'A'
-
-🔒 Armed (Servo moves)
-
-Test Fire
-
-'T'
-
-Relay ON (50 ms)
-
-Launch Fire
-
-'I'
-
-Relay ON (Continuous)
-
-Disarm / Safe
-
-'S'
-
-🟢 Safe (Servo returns)
-
-<h2 align="center">🧩 Repository Structure</h2>
-
-DhumketuX_DETS/
-├── LaunchPad/
-│ └── LaunchPad_Tx_D13.ino
-├── GroundStation/
-│ └── GS_Receiver.ino
-├── web-ui/
-│ ├── index.html
-│ ├── style.css
-│ └── script.js
-├── docs/
-│ └── calibration_guide.md
-└── README.md
-
-
-<h1 align="center">Made By Lian Mollick</h1>
+#### C++ Struct Definition
+```cpp
+typedef struct {
+    float thrust_kPa;
+    float temperature_C;
+    float humidity_perc;
+} Telemetry_t;
