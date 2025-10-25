@@ -47,8 +47,8 @@ Below is the **consolidated, fail-proof wiring guide** for both units.
 | | RST | PB12 | LoRa hardware reset |
 | | DIO0 | PB13 | Interrupt (RxDone/TxDone) |
 | | SCK | PA5 | SPI Clock |
-| | MISO | PA7 | SPI MISO |
-| | MOSI | PA6 | SPI MOSI |
+| | MISO | PA6 | SPI MISO |
+| | MOSI | PA7 | SPI MOSI |
 | **HX711** | Load Cell DOUT | PB0 | Thrust sensor input |
 | | Load Cell SCK | PB1 | 24-bit ADC clock |
 | **DHT22** | Temperature/Humidity | PA10 | One-wire data line |
