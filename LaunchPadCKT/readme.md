@@ -34,7 +34,7 @@ The **DhumketuX LPU (Launch Pad Unit)** is the on-field controller responsible f
 
 ---
 
-## 🧩 Board Profile: DhumketuX_LPU
+## Board Profile: DhumketuX_LPU
 
 | Parameter | Value | Rationale |
 |------------|--------|-----------|
@@ -64,7 +64,7 @@ The **DhumketuX LPU (Launch Pad Unit)** is the on-field controller responsible f
 
 ---
 
-## 🔌 2. Hardware Interface & Pinout Reference
+##  2. Hardware Interface & Pinout Reference
 
 ### 📡 LoRa SPI Bus (RA-02)
 
@@ -77,7 +77,7 @@ The **DhumketuX LPU (Launch Pad Unit)** is the on-field controller responsible f
 | MISO | PA6 | SPI MISO |
 | MOSI | PA7 | SPI MOSI |
 
-### 🧱 Sensors & Actuators
+###  Sensors & Actuators
 
 | Component | Function | STM32 Pin | Notes |
 |------------|-----------|------------|-------|
@@ -105,7 +105,9 @@ struct __attribute__((packed)) Telemetry_t {
 // Total size: 15 bytes
 Any field or order modification must also be updated in the Ground Station decoder.
 
-🧠 4. Command Protocol (Reception)
+
+
+4. Command Protocol (Reception)
 Command	Action	State Transition
 A	Arm system (unlock safety servo)	DISARMED → ARMED
 S	Safe lock (disarm)	ARMED → DISARMED
@@ -114,7 +116,9 @@ T	Transmit test telemetry	—
 
 Non-blocking LoRa parsing ensures no delay in command reception.
 
-🧰 5. Build and Development Environment Setup
+
+
+5. Build and Development Environment Setup
 Tool	Recommended Version
 Arduino IDE	2.2.1
 STM32Duino Core	2.6.0+
@@ -146,7 +150,8 @@ Install the above libraries.
 
 Compile & Upload via STM32CubeProgrammer.
 
-🧩 6. Repository Structure
+
+ 6. Repository Structure
 css
 Copy code
 DhumketuX_LPU/
@@ -158,8 +163,10 @@ DhumketuX_LPU/
 │   └── wiring_diagram.png
 ├── README.md
 └── LICENSE
-🧾 License
+
+
+License
 This project is licensed under the MIT License — see the LICENSE file for details.
 
 
-<p align="center"> Made by <b>Lian Mollick</b> <br>Part of the DhumketuX Engine Test System (DETS) </p> 
+Made by Lian Mollick Nehal
