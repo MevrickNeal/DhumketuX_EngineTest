@@ -1,4 +1,4 @@
-````markdown
+
 <p align="center">
   <img width="252" height="80" alt="dhumketux-logo-picv89pfmqg232dzle0szl8ygpq038fuxufww8t3pc" src="https://github.com/user-attachments/assets/447263ab-24ea-4f26-ab0a-907d59a87e52" />
 </p>
@@ -183,4 +183,4 @@ See the [LICENSE](./LICENSE) file for full terms.
 <p align="center">
   <b>Made by Lian Mollick</b> 🚀
 </p>
-```
+
