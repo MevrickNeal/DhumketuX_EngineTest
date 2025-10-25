@@ -1,6 +1,6 @@
 
 <p align="center">
-  <img src="https://github.com/DhumketuX/DhumketuX-DETS/assets/logo.png" width="180">
+ <img width="252" height="80" alt="dhumketux-logo-picv89pfmqg232dzle0szl8ygpq038fuxufww8t3pc" src="https://github.com/user-attachments/assets/d4caefdf-5ff9-491e-a70a-736fbb335012" />
 </p>
 
 <h1 align="center">🚀 DhumketuX Engine Test System (DETS)</h1>
