@@ -19,14 +19,16 @@
 #define LORA_CS_PIN         PA4         // NSS/CS
 #define LORA_RST_PIN        PB12        // RST
 #define LORA_DIO0_PIN       PB13        // DIO0 (Interrupt for Rx/Tx Done)
-
+#define SPI_SCK_PIN     PA5 // Standard SCK pin
+#define SPI_MISO_PIN    PA7 // <-- MISO function must now use the physical MOSI pin (PA7)
+#define SPI_MOSI_PIN    PA6 // <-- MOSI function must now use the physical MISO pin (PA6)
 // Hardware Pinout
 #define LOADCELL_DOUT_PIN   PB0         // Load Cell Data (DOUT)
 #define LOADCELL_CLK_PIN    PB1         // Load Cell Clock (SCK)
-#define SERVO_PIN           PA9         // Safety Control (PWM for Servo)
+#define SERVO_PIN           PA3         // Safety Control (PWM for Servo)
 #define IGNITION_RELAY_PIN  PC13        // Ignition Relay Output (Active LOW if using common relay module)
 #define ALERT_PIN           PB10        // Buzzer/LED for Status/Alert
-#define DHT_PIN             PA8         // Temp/Humi DHT22 Data
+#define DHT_PIN             PA10         // Temp/Humi DHT22 Data
 
 // System Timing & Frequencies
 #define TELEMETRY_INTERVAL  100L        // Telemetry transmission interval (ms)
