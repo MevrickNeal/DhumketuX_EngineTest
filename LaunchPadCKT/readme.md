@@ -161,4 +161,5 @@ DhumketuX_LPU/
 🧾 License
 This project is licensed under the MIT License — see the LICENSE file for details.
 
-<p align="center"> Made by <b>Lian Mollick</b> 🚀 <br>Part of the DhumketuX Engine Test System (DETS) </p> 
+
+<p align="center"> Made by <b>Lian Mollick</b> <br>Part of the DhumketuX Engine Test System (DETS) </p> 
