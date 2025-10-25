@@ -1,5 +1,6 @@
 <p align="center">
-  <img src="https://github.com/DhumketuX/DhumketuX-LPU/assets/logo.png" width="160" />
+  <img width="252" height="80" alt="dhumketux-logo-picv89pfmqg232dzle0szl8ygpq038fuxufww8t3pc" src="https://github.com/user-attachments/assets/d60008d8-051f-476f-9584-1da0d1d83e0f" />
+
 </p>
 
 <h1 align="center">🚀 DhumketuX LPU – Bluepill F103C8T6 Firmware</h1>
