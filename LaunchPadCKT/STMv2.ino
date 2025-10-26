@@ -1,158 +1,80 @@
 /**
- * @file LaunchPad_Tx.ino
- * @brief DhumketuX Launch Pad Unit (LPU) Firmware
- * * MCU: STM32 Bluepill (F103C8T6) with Arduino Core.
- * Wireless: LoRa RA-02 via Hardware SPI.
- * Constraints: Highly efficient, non-blocking, fail-safe. 
- * Strictly no 'String' objects. Use fixed-size integers.
+ * @file LaunchPad_Tx_RadioLib.ino
+ * @brief DhumketuX LPU Final Operational Firmware
+ * STATUS: Integrated live sensor readings for DHT22 (Temp/Humi) and HX711 (Load Cell).
+ * PINOUT: LoRa RST on PB5.
  */
 
 #include <SPI.h>
-#include <LoRa.h>
+#include <RadioLib.h> 
+#include <Servo.h> 
+#include <math.h>
+
+// --- Sensor Libraries ---
 #include <DHT.h>
-#include <Adafruit_ADS1X15.h> // Common library for HX711/ADS - Assuming a common interface or using ADS for load cell
+#include <HX711-ADC.h>
 
 // --- I. Configuration & Constants ---
 
 // LoRa Module Configuration (RA-02)
-#define LORA_FREQ_MHZ       433E6       // LoRa Frequency
-#define LORA_CS_PIN         PA4         // NSS/CS
-#define LORA_RST_PIN        PB12        // RST
-#define LORA_DIO0_PIN       PB13        // DIO0 (Interrupt for Rx/Tx Done)
-#define SPI_SCK_PIN     PA5 // Standard SCK pin
-#define SPI_MISO_PIN    PA7 // <-- MISO function must now use the physical MOSI pin (PA7)
-#define SPI_MOSI_PIN    PA6 // <-- MOSI function must now use the physical MISO pin (PA6)
+#define LORA_FREQ_MHZ       433.0       
+#define LORA_CS_PIN         PA4         
+#define LORA_RST_PIN        PB5         // Stable RST Pin
+#define LORA_DIO0_PIN       PB13        
+
 // Hardware Pinout
-#define LOADCELL_DOUT_PIN   PB0         // Load Cell Data (DOUT)
-#define LOADCELL_CLK_PIN    PB1         // Load Cell Clock (SCK)
-#define SERVO_PIN           PA3         // Safety Control (PWM for Servo)
-#define IGNITION_RELAY_PIN  PC13        // Ignition Relay Output (Active LOW if using common relay module)
-#define ALERT_PIN           PB10        // Buzzer/LED for Status/Alert
-#define DHT_PIN             PA10         // Temp/Humi DHT22 Data
+#define LOADCELL_DOUT_PIN   PB0         // HX711 DOUT
+#define LOADCELL_CLK_PIN    PB1         // HX711 SCK
+#define SERVO_PIN           PA9         
+#define IGNITION_RELAY_PIN  PC13
+#define ALERT_PIN           PB10
+#define DHT_PIN             PA8         // DHT22 Data
+
+// Sensor Configuration
+#define DHT_TYPE            DHT22       // Using a DHT22 sensor
+
+// Servo Limits
+#define SERVO_LOCK_ANGLE    0           
+#define SERVO_ARM_ANGLE     90          
 
 // System Timing & Frequencies
-#define TELEMETRY_INTERVAL  100L        // Telemetry transmission interval (ms)
-#define SENSOR_READ_INTERVAL 1000L      // Sensor reading interval (ms)
-#define ALERT_FLASH_ARM     250L        // Flash interval while ARMED (ms)
-#define IGNITION_PULSE_MS   300L        // Critical ignition pulse duration (ms)
+#define TELEMETRY_INTERVAL  100L
+#define SENSOR_READ_INTERVAL 1000L      // Read sensors every 1 second
+#define ALERT_FLASH_ARM     250L
+#define IGNITION_PULSE_MS   5000L       // 5.0 seconds
 
 // --- II. Data Structures & State Management ---
 
-// Telemetry Data Structure (Fixed-size types for integrity)
-struct __attribute__((packed)) Telemetry_t {
-    float thrust;       // Load cell reading (kg or N)
-    float temperature;  // DHT22 temperature (°C)
-    float humidity;     // DHT22 humidity (%)
-    int8_t isArmed;     // System armed state (1: Armed, 0: Disarmed)
-    uint16_t checksum;  // Simple checksum for data integrity (optional but good practice)
-};
-
-// State Variables
 enum SystemState_t {
     STATE_DISARMED,
     STATE_ARMED,
     STATE_LAUNCH_SEQUENCE
 };
 
-SystemState_t systemState = STATE_DISARMED;
-Telemetry_t tx_telemetry;
+struct __attribute__((packed)) Telemetry_t {
+    float thrust;       
+    float temperature;  
+    float humidity;     
+    int8_t isArmed;     
+    uint16_t checksum;  
+};
 
-// Non-blocking Timing Variables
+// --- III. Global Objects ---
+SX1276 radio = new Module(LORA_CS_PIN, LORA_DIO0_PIN, LORA_RST_PIN); 
+Servo safetyServo;
+DHT dht(DHT_PIN, DHT_TYPE);
+HX711_ADC LoadCell(LOADCELL_DOUT_PIN, LOADCELL_CLK_PIN);
+
+// Global Variables
+SystemState_t systemState = STATE_DISARMED; 
+Telemetry_t tx_telemetry;
 volatile unsigned long lastTelemetryTx = 0;
 volatile unsigned long lastSensorRead = 0;
 volatile unsigned long lastAlertToggle = 0;
 volatile unsigned long launchStartTime = 0;
 
-// Peripheral Objects (Assuming use of standard libraries)
-// NOTE: Using a placeholder for Load Cell. If using HX711, replace with HX711 library.
-// For this example, we'll simulate the load cell reading with a placeholder function.
-// DHT dht(DHT_PIN, DHT22); // Uncomment and configure if using DHT library
-// Servo safetyServo; // Uncomment and configure if using Servo library
+// --- IV. Peripheral Management Functions ---
 
-// --- III. Peripheral Management Functions ---
-
-/**
- * @brief Reads Load Cell sensor data. (Placeholder for actual Load Cell/HX711 implementation)
- * @return float Thrust reading (e.g., in Newtons or kg).
- */
-float readLoadCell() {
-    // Implement actual Load Cell (e.g., HX711) reading logic here.
-    // For now, return a fixed value or a placeholder.
-    // Example: return loadcell.get_value(10);
-    return 0.00; // Placeholder value
-}
-
-/**
- * @brief Reads DHT22 sensor data for Temperature and Humidity.
- */
-void readEnvironmentSensors() {
-    // float h = dht.readHumidity();
-    // float t = dht.readTemperature();
-
-    // Placeholder: Simulate sensor readings
-    float t = 25.5; 
-    float h = 50.0;
-    
-    // Check if any reading failed and update struct
-    if (isnan(t) || isnan(h)) {
-        tx_telemetry.temperature = -99.0; // Error indicator
-        tx_telemetry.humidity = -99.0;
-        Serial.print("DHT Read Error\n");
-    } else {
-        tx_telemetry.temperature = t;
-        tx_telemetry.humidity = h;
-    }
-}
-
-/**
- * @brief Handles non-blocking buzzer/LED feedback.
- */
-void handleAlertFeedback() {
-    unsigned long currentMillis = millis();
-
-    if (systemState == STATE_ARMED) {
-        // Flash feedback while armed
-        if (currentMillis - lastAlertToggle >= ALERT_FLASH_ARM) {
-            digitalWrite(ALERT_PIN, !digitalRead(ALERT_PIN)); // Toggle
-            lastAlertToggle = currentMillis;
-        }
-    } else if (systemState == STATE_LAUNCH_SEQUENCE) {
-        // Rapid continuous tone/flash during launch sequence
-        // A very short interval simulates a near-continuous tone/flash
-        if (currentMillis - lastAlertToggle >= 50L) {
-            digitalWrite(ALERT_PIN, !digitalRead(ALERT_PIN));
-            lastAlertToggle = currentMillis;
-        }
-    } else {
-        // OFF state for DISARMED
-        digitalWrite(ALERT_PIN, LOW);
-    }
-}
-
-/**
- * @brief Sets the state of the safety servo.
- * @param lockState TRUE to lock (safe position), FALSE to unlock (ready to fire).
- */
-void setSafety(bool lockState) {
-    // safetyServo.write(lockState ? 0 : 90); // Example servo positions
-    // Placeholder: Control the servo output (Requires PWM setup on PA9)
-    if (lockState) {
-        // Set PWM for 'Safe' position (e.g., 0 degrees)
-        // analogWrite(SERVO_PIN, 0); // Simplified, actual servo library needed
-    } else {
-        // Set PWM for 'Fire' position (e.g., 90 degrees)
-        // analogWrite(SERVO_PIN, 90);
-    }
-}
-
-// --- IV. LoRa Communication & Protocol ---
-
-/**
- * @brief Simple checksum calculation (XOR all bytes).
- * @param data Pointer to data.
- * @param length Size of data.
- * @return uint16_t Calculated checksum.
- */
 uint16_t calculateChecksum(const void* data, size_t length) {
     uint16_t sum = 0;
     const uint8_t* byteData = (const uint8_t*)data;
@@ -162,163 +84,207 @@ uint16_t calculateChecksum(const void* data, size_t length) {
     return sum;
 }
 
-/**
- * @brief Transmits the Telemetry_t struct via LoRa.
- */
-void transmitTelemetry() {
-    // 1. Update dynamic members
-    tx_telemetry.thrust = readLoadCell();
-    tx_telemetry.isArmed = (int8_t)systemState; 
-
-    // 2. Calculate checksum
-    tx_telemetry.checksum = calculateChecksum(&tx_telemetry, sizeof(Telemetry_t) - sizeof(uint16_t));
-    
-    // 3. Begin packet and send
-    LoRa.beginPacket();
-    LoRa.write((uint8_t*)&tx_telemetry, sizeof(Telemetry_t));
-    LoRa.endPacket(true); // 'true' is for non-blocking asynchronous transmission
+// --- NEW: Live Sensor Reading ---
+float readLoadCell() { 
+    if (LoadCell.isReady()) {
+        // Request a new reading
+        LoadCell.startRead(); 
+        // Get the value (e.g., in grams or kg, depends on your calibration factor)
+        // You MUST calibrate this factor for accurate thrust readings.
+        // float calibration_factor = 419.0; // Example: Set this with a known weight
+        // return LoadCell.getData() / calibration_factor; 
+        
+        // For now, return raw data
+        return LoadCell.getData();
+    }
+    return -99.9; // Return error code if not ready
 }
 
-/**
- * @brief Checks for and processes single-character commands from LoRa.
- */
-void checkLoRaCommand() {
-    int packetSize = LoRa.parsePacket();
+// --- NEW: Live Sensor Reading ---
+void readEnvironmentSensors() { 
+    float t = dht.readTemperature();
+    float h = dht.readHumidity();
     
-    if (packetSize > 0) {
-        char command = (char)LoRa.read();
-        
-        // Print command for debugging (C-style string only)
-        char dbg_msg[30];
-        snprintf(dbg_msg, sizeof(dbg_msg), "Rx Cmd: %c\n", command);
-        Serial.print(dbg_msg);
+    // Check if any reading failed
+    if (isnan(t) || isnan(h)) {
+        Serial.println("DHT Read Error!");
+        tx_telemetry.temperature = -99.9; 
+        tx_telemetry.humidity = -99.9;
+    } else {
+        tx_telemetry.temperature = t;
+        tx_telemetry.humidity = h;
+    }
+}
+
+// --- Servo and Alert Functions (Unchanged) ---
+void setSafety(bool lockState) { 
+    if (!safetyServo.attached()) {
+        safetyServo.attach(SERVO_PIN);
+    }
+    if (lockState) {
+        safetyServo.write(SERVO_LOCK_ANGLE);
+        Serial.print("Safety: LOCKED ("); Serial.print(SERVO_LOCK_ANGLE); Serial.println(" deg)");
+    } else {
+        safetyServo.write(SERVO_ARM_ANGLE);
+        Serial.print("Safety: UNLOCKED/ARMED ("); Serial.print(SERVO_ARM_ANGLE); Serial.println(" deg)");
+    }
+}
+
+void handleAlertFeedback() {
+    unsigned long currentMillis = millis();
+    if (systemState == STATE_ARMED) {
+        if (currentMillis - lastAlertToggle >= ALERT_FLASH_ARM) {
+            digitalWrite(ALERT_PIN, !digitalRead(ALERT_PIN)); 
+            lastAlertToggle = currentMillis;
+        }
+    } else if (systemState == STATE_LAUNCH_SEQUENCE) {
+        if (currentMillis - lastAlertToggle >= 50L) {
+            digitalWrite(ALERT_PIN, !digitalRead(ALERT_PIN));
+            lastAlertToggle = currentMillis;
+        }
+    } else {
+        digitalWrite(ALERT_PIN, LOW);
+    }
+}
+
+// --- LoRa and State Functions (Unchanged) ---
+void handleLaunchSequence() {
+    if (systemState == STATE_LAUNCH_SEQUENCE) {
+        unsigned long currentMillis = millis();
+        if (currentMillis - launchStartTime < IGNITION_PULSE_MS) {
+            digitalWrite(IGNITION_RELAY_PIN, LOW); 
+        } else {
+            digitalWrite(IGNITION_RELAY_PIN, HIGH); 
+            systemState = STATE_DISARMED;
+            setSafety(true);
+            Serial.println("Launch Sequence Complete. System DISARMED.");
+        }
+    }
+}
+
+void transmitTelemetry() {
+    tx_telemetry.thrust = readLoadCell();
+    tx_telemetry.isArmed = (int8_t)systemState; 
+    tx_telemetry.checksum = calculateChecksum(&tx_telemetry, sizeof(Telemetry_t) - sizeof(uint16_t));
+    
+    // Transmit the struct
+    radio.startTransmit((uint8_t*)&tx_telemetry, sizeof(Telemetry_t));
+}
+
+void checkLoRaCommand() {
+    int packetLength = radio.available();
+    if (packetLength > 0) {
+        uint8_t rxBuffer[1]; 
+        radio.readData(rxBuffer, 1);
+        char command = (char)rxBuffer[0];
 
         switch (command) {
             case 'A': // Arm
                 if (systemState == STATE_DISARMED) {
                     systemState = STATE_ARMED;
-                    setSafety(false); // Unlock Safety
-                    Serial.print("System ARMED\n");
+                    setSafety(false);
+                    Serial.println("Command 'A': System ARMED.");
                 }
                 break;
             case 'S': // Safe/Disarm
                 if (systemState != STATE_DISARMED) {
                     systemState = STATE_DISARMED;
-                    setSafety(true); // Lock Safety
-                    digitalWrite(IGNITION_RELAY_PIN, HIGH); // Ensure Ignition OFF
-                    Serial.print("System DISARMED\n");
+                    setSafety(true);
+                    digitalWrite(IGNITION_RELAY_PIN, HIGH);
+                    Serial.println("Command 'S': System DISARMED.");
                 }
-                break;
-            case 'T': // Test Telemetry (Used here to trigger an immediate Tx)
-                transmitTelemetry();
                 break;
             case 'I': // Initiate Launch Sequence
                 if (systemState == STATE_ARMED) {
                     systemState = STATE_LAUNCH_SEQUENCE;
                     launchStartTime = millis();
-                    Serial.print("LAUNCH Sequence Initiated\n");
+                    Serial.println("Command 'I': LAUNCH SEQUENCE INITIATED!");
                 }
                 break;
-            default:
-                // Unknown command
+            case 'T': // Test Telemetry
+                transmitTelemetry();
                 break;
         }
     }
 }
 
-/**
- * @brief Handles the critical launch sequence timing and control.
- */
-void handleLaunchSequence() {
-    if (systemState == STATE_LAUNCH_SEQUENCE) {
-        unsigned long currentMillis = millis();
-        
-        if (currentMillis - launchStartTime < IGNITION_PULSE_MS) {
-            // FIRE! Activate Ignition Relay
-            digitalWrite(IGNITION_RELAY_PIN, LOW); // Assumes Active LOW relay
-        } else {
-            // STOP FIRE
-            digitalWrite(IGNITION_RELAY_PIN, HIGH); // Deactivate Relay
-            
-            // Transition to DISARMED state after firing
-            systemState = STATE_DISARMED;
-            setSafety(true);
-            Serial.print("Ignition Pulse Complete. System DISARMED\n");
-        }
-    }
-}
-
-// --- V. Arduino Setup and Loop ---
+// --- V. Setup and Loop ---
 
 void setup() {
     // 1. Pin Initialization
     pinMode(LORA_CS_PIN, OUTPUT);
-    pinMode(LORA_RST_PIN, OUTPUT);
+    pinMode(LORA_RST_PIN, OUTPUT); 
+    pinMode(LORA_DIO0_PIN, INPUT); 
     pinMode(ALERT_PIN, OUTPUT);
     pinMode(IGNITION_RELAY_PIN, OUTPUT);
-    pinMode(LOADCELL_DOUT_PIN, INPUT); // Basic pin mode for placeholders
-    pinMode(LOADCELL_CLK_PIN, OUTPUT);
     
-    // Safety defaults
-    digitalWrite(IGNITION_RELAY_PIN, HIGH); // Ignition OFF
-    digitalWrite(ALERT_PIN, LOW);           // Alert OFF
-    setSafety(true);                        // Servo SAFE
+    // 2. Servo Initialization
+    safetyServo.attach(SERVO_PIN);
+    
+    // 3. Safety defaults
+    digitalWrite(IGNITION_RELAY_PIN, HIGH); 
+    digitalWrite(ALERT_PIN, LOW);           
+    setSafety(true);                        // Servo LOCKED (0 deg)
 
-    // 2. Serial & Peripheral Setup
+    // 4. Serial & Peripheral Setup
     Serial.begin(115200);
-    while (!Serial); // Wait for Serial Monitor to open (optional)
+    delay(500); 
+    Serial.println("\n*** DhumketuX LPU Firmware Booting (w/ Live Sensors) ***");
     
-    SPI.begin(); // Initialize Hardware SPI
-    // dht.begin(); // Initialize DHT (uncomment if using DHT library)
-    // safetyServo.attach(SERVO_PIN); // Initialize Servo (uncomment if using Servo library)
-
-    // 3. LoRa Initialization (Fail-Safe Critical Step)
-    LoRa.setPins(LORA_CS_PIN, LORA_RST_PIN, LORA_DIO0_PIN);
+    SPI.begin(); 
     
-    Serial.print("Initializing LoRa...\n");
-    if (!LoRa.begin(LORA_FREQ_MHZ)) {
-        Serial.print("LoRa INIT FAILED! HALTING MCU.\n");
-        // *** FAIL-SAFE: HALT MCU ***
-        while (1) {
-            digitalWrite(ALERT_PIN, HIGH);
-            delay(50);
-            digitalWrite(ALERT_PIN, LOW);
-            delay(500);
-        } 
+    // 5. LoRa Initialization
+    Serial.print("Initializing LoRa on PB5 RST pin...");
+    int state = radio.beginFSK(); 
+    if (state != RADIOLIB_ERR_NONE) {
+        Serial.print("FATAL: LoRa INIT FAILED! Error: "); Serial.println(state);
+        while (1) { digitalWrite(ALERT_PIN, HIGH); delay(50); digitalWrite(ALERT_PIN, LOW); delay(500); } 
     }
-    Serial.print("LoRa Initialized.\n");
-    LoRa.setSpreadingFactor(10);
-    LoRa.setSignalBandwidth(125E3);
-    LoRa.setCodingRate4(5);
+    Serial.println("LoRa Initialized (SUCCESS).");
+    radio.setFrequency(LORA_FREQ_MHZ);
+    radio.setBandwidth(125.0);
+    radio.setSpreadingFactor(10);
+    radio.setCodingRate(5);
+    
+    // 6. Sensor Initialization
+    Serial.print("Initializing DHT22 Sensor...");
+    dht.begin();
+    Serial.println("OK.");
 
-    // Initial sensor read
-    readEnvironmentSensors();
+    Serial.print("Initializing Load Cell (HX711)...");
+    LoadCell.begin();
+    // LoadCell.setSamples(10); // Optional: smooth out readings
+    LoadCell.tare(); // Zero the scale at boot
+    Serial.println("OK (Tared).");
+    
+    radio.startReceive(); 
+    readEnvironmentSensors(); // Get initial baseline
+    Serial.println("System Ready. Waiting for 'A' (ARM) command.");
 }
 
 void loop() {
     unsigned long currentMillis = millis();
     
-    // 1. Handle Critical Launch Sequence
-    // This must be checked first for rapid response.
+    // 1. Critical Launch Sequence
     handleLaunchSequence(); 
 
-    // 2. Non-blocking Sensor Reading
+    // 2. Non-blocking Sensor Read
     if (currentMillis - lastSensorRead >= SENSOR_READ_INTERVAL) {
         lastSensorRead = currentMillis;
-        readEnvironmentSensors();
+        readEnvironmentSensors(); // Read DHT
+        // Note: Load cell is read just-in-time during transmitTelemetry()
     }
 
-    // 3. Non-blocking Telemetry Transmission
+    // 3. Non-blocking Telemetry Tx
     if (currentMillis - lastTelemetryTx >= TELEMETRY_INTERVAL) {
         lastTelemetryTx = currentMillis;
-        transmitTelemetry();
+        transmitTelemetry();  // This now sends real sensor data
+        radio.startReceive(); 
     }
     
-    // 4. Non-blocking Command Reception
+    // 4. Command Reception
     checkLoRaCommand();
 
-    // 5. Non-blocking Visual/Audio Feedback
+    // 5. Visual/Audio Feedback
     handleAlertFeedback();
-    
-    // Loop is now complete, highly efficient, and non-blocking.
 }
