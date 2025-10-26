@@ -212,7 +212,7 @@
             flex-grow: 1;
             border: 1px solid var(--color-panel-border);
             overflow-y: scroll;
-            height: 250px; /* Limit height */
+            height: 250px; 
         }
 
         /* --- Reorganized and Professional Control Panel --- */
@@ -298,29 +298,36 @@
             transform: none;
         }
 
-        /* Custom Modal Styles for Password Prompt */
+        /* Custom Modal Styles (macOS Style) */
         .modal {
             display: none;
             position: fixed;
             z-index: 100;
             left: 0; top: 0; width: 100%; height: 100%;
-            overflow: auto; background-color: rgba(0,0,0,0.6);
+            overflow: auto; background-color: rgba(0,0,0,0.4); /* Lighter backdrop */
             justify-content: center; align-items: center;
         }
         .modal-content {
-            background: var(--bg-dark);
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.8);
+            /* macOS-like appearance */
+            background: rgba(255, 255, 255, 0.2); /* Slightly transparent white/glassy */
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            border-radius: 12px; /* Rounder corners */
+            box-shadow: 0 5px 20px rgba(0,0,0,0.5);
             width: 300px;
             text-align: center;
-            border: 1px solid var(--color-accent);
+            border: 1px solid rgba(255, 255, 255, 0.3); /* Thin light border */
         }
         #passwordInput {
-            width: 80%; padding: 10px; margin: 10px 0 20px 0;
-            border-radius: 4px; border: 1px solid var(--color-accent);
-            background: rgba(0, 0, 0, 0.5); color: var(--color-text);
+            width: 90%; 
+            padding: 10px; 
+            margin: 10px 0 20px 0;
+            border-radius: 6px; 
+            border: 1px solid #555;
+            background: rgba(0, 0, 0, 0.7); 
+            color: var(--color-text);
             font-family: 'Courier New', monospace;
+            box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5);
         }
     </style>
 </head>
@@ -424,7 +431,7 @@
         let chart;
         let isArmed = false;
         let commandToExecute = null;
-        let lastGSUptime = 0; // Tracks GS uptime for link status (Time:TTTTTTTT)
+        let lastGSUptime = 0; 
         let linkStatusInterval = null;
 
         // Data storage
@@ -436,9 +443,10 @@
         let maxThrustValue = 0.0;
         let ignitionTime_ms = null;
         let peakThrustTime_ms = null;
+        let ignitionDetected = false;
         
         const DEFAULT_PASSWORD = '2026';
-        const LINK_TIMEOUT_MS = 2000; // 2 seconds for link failure detection
+        const LINK_TIMEOUT_MS = 2000; 
 
         // UI Elements
         const statusDisplayBox = document.getElementById('status-display-box');
@@ -460,16 +468,15 @@
         const passwordError = document.getElementById('passwordError');
 
         const COMMANDS = {
-            ARM: 'A',    // Triggers LPU 2x beep and unlocks servo
-            SAFE: 'S',   // Locks servo, disables relay
-            TEST: 'T',   // Triggers LPU 4s tone + 300ms pulse
-            LAUNCH: 'L', // Triggers LPU 30s countdown sequence
-            IGNITE: 'I'  // (Internal use, sent automatically by LPU after countdown)
+            ARM: 'A',    
+            SAFE: 'S',   
+            TEST: 'T',   
+            LAUNCH: 'L', 
+            HANDSHAKE: 'Z' // Single beep connection confirmation
         };
 
-        const MAX_POINTS = 150;
-        const IGNITION_THRESHOLD = 15;
-        const NOISE_FLOOR = 5.0;
+        const MAX_POINTS = 150; // Max points visible on the scrolling graph
+        const IGNITION_THRESHOLD = 15; // Threshold (in N or kPa) to detect ignition
         
         // --- INITIALIZATION ---
         window.onload = init;
@@ -481,7 +488,6 @@
             updateStatusDots(false, false);
             statusDisplayBox.textContent = 'STATUS: DISCONNECTED (GS/LP Red)';
             
-            // Set initial theme based on toggle (Default is dark mode)
             document.getElementById('appBody').classList.toggle('day-mode', !darkModeToggle.checked);
         }
 
@@ -517,16 +523,13 @@
         }
         
         function checkLinkStatus() {
-            // Check GS Link Status (Relies on serial data flow from GS)
             const currentTime = new Date().getTime();
             if (currentTime - lastGSUptime > LINK_TIMEOUT_MS) {
-                // GS has not sent any data in 2 seconds
                 gsStatusDot.style.backgroundColor = 'red';
                 lpStatusDot.style.backgroundColor = 'red';
                 countdownDisplay.textContent = 'LINK LOST';
                 countdownDisplay.style.color = '#FF3366';
             } else {
-                 // If we have received data, GS link is good. LP status is managed by telemetry Armed:B field.
                  gsStatusDot.style.backgroundColor = 'lime';
             }
         }
@@ -534,14 +537,12 @@
         function logPacket(type, payload) {
             const timestamp = new Date().toLocaleTimeString('en-US');
             let color;
-            if (type === 'TX') color = '#FFD700'; // Command Sent
-            else if (type === 'RX') color = '#00FFC0'; // Telemetry Received
-            else if (type === 'SYS') color = '#00BFFF'; // System Event
-            else color = '#FF3366'; // Error
+            if (type === 'TX') color = '#FFD700';
+            else if (type === 'RX') color = '#00FFC0';
+            else if (type === 'SYS') color = '#00BFFF';
+            else color = '#FF3366';
             
-            // Use innerHTML to allow styling of the payload
             statusDisplayBox.innerHTML += `\n[${timestamp}] <span style="color:${color};">${type}</span>: ${payload}`;
-            // Scroll to bottom
             statusDisplayBox.scrollTop = statusDisplayBox.scrollHeight;
         }
 
@@ -569,11 +570,7 @@
         function authorizeAndExecute() {
             if (passwordInput.value === DEFAULT_PASSWORD) {
                 hidePasswordModal();
-                if (commandToExecute === COMMANDS.LAUNCH) {
-                    sendCommand(COMMANDS.LAUNCH); // Send 'L' to start LPU 30s countdown
-                } else if (commandToExecute === COMMANDS.TEST) {
-                    sendCommand(COMMANDS.TEST); // Send 'T' for LPU 4s tone + 300ms pulse
-                }
+                sendCommand(commandToExecute);
             } else {
                 passwordError.style.display = 'block';
             }
@@ -588,14 +585,12 @@
 
             try {
                 port = await navigator.serial.requestPort();
-                // FIX: Corrected baudRate to 115200 to match firmware
                 await port.open({ baudRate: 115200 }); 
 
                 connectBtn.disabled = true;
                 updateStatusDots(true, false);
                 [armBtn, safeBtn, testBtn, launchBtn].forEach(btn => btn.disabled = false);
                 
-                // Start Link Status Monitor
                 linkStatusInterval = setInterval(checkLinkStatus, 500);
 
                 const textDecoder = new TextDecoderStream();
@@ -607,7 +602,13 @@
                 outputStream = textEncoder.writable;
 
                 readLoop();
-                logPacket('SYS', 'GS Connected to USB Serial.');
+                logPacket('SYS', 'GS Connected to USB Serial. Sending Handshake...');
+                
+                // Send 'Z' for LPU handshake tone
+                const writer = outputStream.getWriter();
+                await writer.write(COMMANDS.HANDSHAKE + '\n');
+                writer.releaseLock(); 
+                logPacket('TX', COMMANDS.HANDSHAKE);
 
             } catch (error) {
                 console.error('Serial Connection Error:', error);
@@ -624,7 +625,6 @@
                     const { value, done } = await reader.read();
                     if (done) { break; }
                     if (value) {
-                        // The firmware uses \r\n, split on newline
                         const lines = value.split('\n').filter(line => line.trim().length > 0);
                         lines.forEach(line => processTelemetry(line.trim()));
                     }
@@ -637,43 +637,39 @@
 
         // --- 3. DATA PROCESSING & CHARTING ---
         function processTelemetry(dataLine) {
-            // Log only raw incoming telemetry, filtered to avoid spamming the log with TX confirmations
-            if (dataLine.includes("Thrust:")) {
-                // logPacket('RX', dataLine); 
-            } else {
-                // Log all system messages (boot, TX confirmation, errors)
+            // Log all system messages (boot, TX confirmation, errors)
+            if (!dataLine.includes(',')) {
                  logPacket('RX', dataLine); 
                  return;
             }
             
+            // CSV Format: Thrust, Temp, Humi, Time, ArmedState
             const parts = dataLine.split(',');
-            let dataPoint = { thrust: null, temp: null, humi: null, uptime: null, armedState: null };
+            let dataPoint = {};
 
-            parts.forEach(part => {
-                if (part.startsWith("Thrust:")) { dataPoint.thrust = parseFloat(part.replace('Thrust:', '').trim()); }
-                else if (part.startsWith("Temp:")) { dataPoint.temp = parseFloat(part.replace('Temp:', '').trim()); }
-                else if (part.startsWith("Humi:")) { dataPoint.humi = parseFloat(part.replace('Humi:', '').trim()); }
-                else if (part.startsWith("Time:")) { dataPoint.uptime = parseInt(part.replace('Time:', '').trim()); }
-                else if (part.startsWith("Armed:")) { dataPoint.armedState = parseInt(part.replace('Armed:', '').trim()); }
-            });
-
-            // CRITICAL: Update Link Status and LP Status Dot
-            if (dataPoint.uptime !== null) {
-                lastGSUptime = new Date().getTime(); 
-            }
-            
-            // Update LP State and UI buttons based on LPU's state
-            if (dataPoint.armedState !== null) {
-                lpStatusDot.style.backgroundColor = 'lime'; // If we get the state, LP link is good.
-                updateUIState(dataPoint.armedState);
+            // Ensure we have 5 parts for the CSV
+            if (parts.length < 5) {
+                logPacket('WARN', 'Incomplete CSV packet received.');
+                return;
             }
 
+            // Assign values by index (Thrust, Temp, Humi, Time, ArmedState)
+            dataPoint.thrust = parseFloat(parts[0]);
+            dataPoint.temp = parseFloat(parts[1]);
+            dataPoint.humi = parseFloat(parts[2]);
+            dataPoint.uptime = parseInt(parts[3]);
+            dataPoint.armedState = parseInt(parts[4]);
+
+            // CRITICAL: Update Link Status and LP State
+            lastGSUptime = new Date().getTime(); 
+            updateUIState(dataPoint.armedState);
 
             // Update Metrics and Data
-            if (dataPoint.thrust !== null) {
+            if (!isNaN(dataPoint.thrust)) {
                 const now = new Date();
                 const timeStamp = now.toLocaleTimeString('en-US');
 
+                // NEW: Detect and record peak thrust and ignition time
                 detectIgnition(dataPoint.thrust, now.getTime());
                 detectPeakThrust(dataPoint.thrust, now.getTime());
 
@@ -682,6 +678,7 @@
                 timeLabels.push(timeStamp);
                 thrustValues.push(dataPoint.thrust);
 
+                // Scroll Left-to-Right logic (fixed window)
                 if (timeLabels.length > MAX_POINTS) {
                     timeLabels.shift();
                     thrustValues.shift();
@@ -695,7 +692,7 @@
             }
 
             // Update Temp/Humi Display
-            if (dataPoint.temp !== null && dataPoint.humi !== null) {
+            if (!isNaN(dataPoint.temp) && !isNaN(dataPoint.humi)) {
                 document.getElementById('currentTemp').textContent = `${dataPoint.temp.toFixed(1)} °C`;
                 document.getElementById('currentHumi').textContent = `${dataPoint.humi.toFixed(1)} %`;
             }
@@ -704,43 +701,42 @@
         function updateUIState(state) {
             // 0: DISARMED, 1: ARMED, 2: COUNTDOWN, 3: IGNITION
             
+            // Default: Assume LPU link is active if we receive a state
+            lpStatusDot.style.backgroundColor = 'lime'; 
+
             launchBtn.disabled = true;
             testBtn.disabled = true;
             armBtn.disabled = true;
             safeBtn.disabled = true;
+            isArmed = false;
 
             if (state === 0) {
                 // DISARMED
-                isArmed = false;
                 countdownDisplay.textContent = 'SAFE MODE';
                 countdownDisplay.style.color = '#00CC66';
                 armBtn.disabled = false;
-                safeBtn.disabled = true;
 
             } else if (state === 1) {
-                // ARMED
+                // ARMED *** FIX: ENABLE COMMAND BUTTONS ***
                 isArmed = true;
                 countdownDisplay.textContent = 'ARMED / READY';
                 countdownDisplay.style.color = '#FFD700';
                 launchBtn.disabled = false;
                 testBtn.disabled = false;
                 safeBtn.disabled = false;
+                armBtn.disabled = true; // Cannot re-arm while armed
 
             } else if (state === 2) {
-                // COUNTDOWN (30s)
+                // COUNTDOWN (LPU is handling TONE/TIMER)
                 countdownDisplay.textContent = 'COUNTDOWN T-xx';
                 countdownDisplay.style.color = '#FF3366';
-                // Only SAFE button is active during countdown for abort
-                safeBtn.disabled = false;
-                launchBtn.disabled = true; 
-                testBtn.disabled = true;
+                safeBtn.disabled = false; // ABORT is always available
 
             } else if (state === 3) {
-                 // IGNITION PULSE (300ms)
+                 // IGNITION PULSE (LPU is handling FIRE/TONE)
                 countdownDisplay.textContent = 'IGNITION PULSE';
                 countdownDisplay.style.color = '#FF3366';
-                safeBtn.disabled = false;
-                // All other controls disabled
+                safeBtn.disabled = false; // ABORT is available but risky
             }
         }
 
@@ -752,7 +748,7 @@
                 data: {
                     labels: timeLabels,
                     datasets: [{
-                        label: 'Real-Time Thrust (N)',
+                        label: 'Thrust (N)',
                         data: thrustValues,
                         borderColor: '#00BFFF',
                         borderWidth: 2,
@@ -764,6 +760,7 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    animation: false, // Turn off most animations for speed
                     scales: {
                         y: {
                             beginAtZero: true,
@@ -772,6 +769,7 @@
                             ticks: { color: '#00BFFF' }
                         },
                         x: {
+                            // Fixed left-to-right scrolling logic
                             title: { display: true, text: 'Time', color: '#00BFFF' },
                             grid: { color: 'rgba(0, 191, 255, 0.1)' },
                             ticks: { color: '#00BFFF' }
@@ -795,11 +793,10 @@
 
             try {
                 const writer = outputStream.getWriter();
-                // Command must be sent as a single character followed by a newline
                 await writer.write(command + '\n'); 
                 writer.releaseLock();
                 
-                logPacket('TX', command); // Log only the command character
+                logPacket('TX', command); 
 
             } catch (error) {
                 console.error('Error sending command:', error);
@@ -810,10 +807,13 @@
         // --- 5. UTILITIES (Metrics, Webcam, CSV) ---
         
         function detectIgnition(currentThrust, currentTimeMs) {
-             // Logic simplified for UI demo purposes
-             if (ignitionTime_ms === null && currentThrust > IGNITION_THRESHOLD) {
+             // NEW LOGIC: Only record ignition once
+             if (!ignitionDetected && currentThrust > IGNITION_THRESHOLD) {
                  ignitionTime_ms = currentTimeMs;
                  document.getElementById('ignitionTime').textContent = new Date(ignitionTime_ms).toLocaleTimeString('en-US');
+                 document.getElementById('ignitionTime').style.color = '#FF3366';
+                 ignitionDetected = true;
+                 logPacket('SYS', `*** IGNITION DETECTED at T=${document.getElementById('ignitionTime').textContent} ***`);
              }
         }
 
@@ -823,10 +823,12 @@
                 peakThrustTime_ms = currentTimeMs;
                 
                 document.getElementById('maxThrust').textContent = `${maxThrustValue.toFixed(2)} N`;
+                document.getElementById('maxThrust').style.color = '#FF3366';
                 
                 if (ignitionTime_ms !== null) {
                     const ttp_s = (peakThrustTime_ms - ignitionTime_ms) / 1000;
                     document.getElementById('timeToPeak').textContent = `${ttp_s.toFixed(2)} s`;
+                    document.getElementById('timeToPeak').style.color = '#FF3366';
                 }
             }
         }
@@ -839,7 +841,6 @@
                         webcamFeed.srcObject = stream;
                     })
                     .catch(err => {
-                        console.error("Webcam access denied or failed:", err);
                         webcamFeed.outerHTML = '<div style="background:#222; color:#aaa; padding:50px; border-radius:8px; border: 1px solid var(--color-accent);">WEBCAM ERROR: Feed unavailable.</div>';
                     });
             }
@@ -853,10 +854,20 @@
 
             let csv = `DhumketuX Engine Test Report\n`;
             csv += `Max Thrust (N):,${maxThrustValue.toFixed(2)}\n`;
-            csv += "\nTime,Thrust (N),Temperature (°C),Humidity (%)\n";
+            csv += `Ignition Time (Local):,${ignitionTime_ms !== null ? new Date(ignitionTime_ms).toLocaleTimeString('en-US') : 'N/A'}\n`;
+            
+            if (ignitionTime_ms !== null) {
+                const ttp_s = (peakThrustTime_ms - ignitionTime_ms) / 1000;
+                csv += `Time to Peak (s):,${ttp_s.toFixed(2)}\n`;
+            } else {
+                 csv += `Time to Peak (s):,N/A\n`;
+            }
+
+            // Define CSV Header
+            csv += "\nTime,Thrust (N),Temperature (°C),Humidity (%),LP_State (0-3)\n";
 
             telemetryData.forEach(row => {
-                csv += `${row.time},${row.thrust.toFixed(2)},${row.temp.toFixed(1)},${row.humi.toFixed(1)}\n`;
+                csv += `${row.time},${row.thrust.toFixed(2)},${row.temp.toFixed(1)},${row.humi.toFixed(1)},${row.armedState}\n`;
             });
 
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
