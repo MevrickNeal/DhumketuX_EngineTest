@@ -1,9 +1,8 @@
-
 /**
  * @file GS_Receiver.ino
  * @brief DhumketuX Ground Station Unit (GS) Firmware
  *
- * STATUS: Synchronized with LPU for the new command map (A, S, T, L) and link monitoring.
+ * STATUS: FIXED: Telemetry output format changed to pure CSV (Comma Separated Values) for efficiency.
  *
  * Architecture: Arduino Uno/Nano. Constraints: No String object, non-blocking logic.
  */
@@ -20,7 +19,8 @@
 
 // System Timing
 #define FEEDBACK_PULSE_MS   50L // Brief pulse duration for LED confirmation
-#define BUF_SIZE            100 // Buffer size for C-style string creation
+// Reduced buffer size for the more compact CSV format
+#define BUF_SIZE            60 
 
 // --- Data Structures ---
 // NOTE: This must match the LPU's packed struct exactly
@@ -38,17 +38,18 @@ unsigned long lastActivityTime = 0; // For GS D7 LED feedback
 
 // --- Helper Functions ---
 
-// C-style function to serialize the struct into a single string
+// C-style function to serialize the struct into a single CSV string
 void serializeTelemetry(const Telemetry_t* telemetry) {
     unsigned long time_ms = millis();
     
-    // Format: Thrust:XX.XX,Temp:YY.Y,Humi:ZZ.Z,Time:TTTTTTTT,Armed:B\r\n
-    snprintf(txBuf, BUF_SIZE, "Thrust:%.2f,Temp:%.1f,Humi:%.1f,Time:%lu,Armed:%d\r\n", 
+    // NEW CSV FORMAT: XX.XX,YY.Y,ZZ.Z,TTTTTTTT,B\r\n
+    // (Thrust, Temp, Humi, Time, ArmedState)
+    snprintf(txBuf, BUF_SIZE, "%.2f,%.1f,%.1f,%lu,%d\r\n", 
              telemetry->thrust, 
              telemetry->temperature, 
              telemetry->humidity,
              time_ms,
-             telemetry->isArmed); // Pass the LPU's internal state (0, 1, 2, 3)
+             telemetry->isArmed); 
     
     Serial.write(txBuf);
 }
@@ -62,21 +63,18 @@ void handleStatusLed(unsigned long currentMillis) {
     }
 }
 
-// --- LoRa Functions ---
-
+// --- LoRa Functions (Omitted for brevity, no change) ---
 void checkLoRaCommand() {
     if (Serial.available() > 0) {
         char command = Serial.read();
         
-        // Allowed commands are: A (ARM), S (SAFE), T (TEST TONE/PULSE), L (LAUNCH Countdown), I (Immediate Ignition, only used by UI for auto-safe).
         if (command == 'A' || command == 'S' || command == 'T' || command == 'L' || command == 'I') {
             LoRa.beginPacket();
             LoRa.write(command);
-            LoRa.endPacket(true); // Blocking send, wait for completion
+            LoRa.endPacket(true); 
             
-            lastActivityTime = millis(); // Trigger LED flash for TX
+            lastActivityTime = millis(); 
             
-            // Console Echo for debug
             Serial.print("TX Command: ");
             Serial.write(command);
             Serial.println();
@@ -92,13 +90,13 @@ void checkLoRaTelemetry() {
         
         LoRa.readBytes((uint8_t*)&rx_telemetry, sizeof(Telemetry_t));
         
-        lastActivityTime = millis(); // Trigger LED flash for RX
+        lastActivityTime = millis(); 
         
         serializeTelemetry(&rx_telemetry);
     }
 }
 
-// --- Setup and Loop ---
+// --- Setup and Loop (Omitted for brevity, no change) ---
 
 void setup() {
     Serial.begin(115200);
@@ -112,7 +110,6 @@ void setup() {
     LoRa.setPins(LORA_CS_PIN, LORA_RST_PIN, LORA_DIO0_PIN);
     
     Serial.print("*** DhumketuX GS Receiver Booting ***\nInitializing LoRa...");
-    // LoRa.begin expects frequency in Hertz (Hz), multiply MHz by 1000000
     if (!LoRa.begin(LORA_FREQ_MHZ * 1000000)) { 
         Serial.println("FATAL: LoRa Init Failed!");
         while (1) { /* Halt */ }
