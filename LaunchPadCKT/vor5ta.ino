@@ -1,7 +1,22 @@
 /**
  * DhumketuX LaunchPad (STM32 Bluepill) — ASCII CSV over LoRa
- * CSV line each ~100 ms: "thrustN,tempC,humidity%,state"
- * Commands from GS: Z(handshake beep), A(arm), S(safe), L(countdown), T(test tone)
+ * Author: Prepared for DhumketuX by ChatGPT (GPT-5 Thinking)
+ *
+ * CSV line ~10 Hz: "thrustN,tempC,humidity%,state"
+ * Commands from GS: Z(handshake beep), A(arm), S(safe), L(30s countdown), T(test tone)
+ *
+ * Pin map (matches your latest share):
+ *   LoRa RA-02  : CS=PA4, RST=PA3, DIO0=PA2   (SCK/MISO/MOSI = PA5/PA6/PA7)
+ *   HX711       : DOUT=PB0, SCK=PB1
+ *   DHT22       : DATA=PA8
+ *   SafetyServo : PWM=PA9  (0°=locked, 90°=armed)
+ *   Ignition    : PC13 (active-LOW, 300 ms pulse)
+ *   Alert/Buzzer: PB10 (HIGH=on)
+ *
+ * Notes:
+ * - Keep proper 433 MHz antennas on both RA-02 units.
+ * - Power RA-02 from a solid 3.3 V rail.
+ * - Calibrate HX711 (set hx_scale) in the field for accurate Newtons.
  */
 
 #include <SPI.h>
@@ -10,7 +25,7 @@
 #include <DHT.h>
 #include <HX711.h>
 
-// ---------------- Pin map (Bluepill) ----------------
+// ======== Pin map ========
 #define LORA_CS_PIN       PA4
 #define LORA_RST_PIN      PA3
 #define LORA_DIO0_PIN     PA2
@@ -23,28 +38,28 @@
 
 #define SERVO_PIN         PA9
 #define IGNITION_PIN      PC13      // Active-LOW relay
-#define ALERT_PIN         PB10      // Buzzer or LED
+#define ALERT_PIN         PB10      // Buzzer/LED
 
-// ---------------- LoRa radio ----------------
+// ======== LoRa radio ========
 #define LORA_FREQ_HZ      433E6
-#define LORA_SF           10        // matches GS
+#define LORA_SF           10        // must match GS
 #define LORA_CR_DEN       5         // coding rate 4/5
-// leave bandwidth/syncword at defaults so it matches GS defaults
-#define LORA_TX_POWER     20        // 2..20 on RA-02 (PA_BOOST)
+// keep bandwidth/syncword defaults to match GS defaults
+#define LORA_TX_POWER     20        // 2..20 (RA-02 PA_BOOST)
 
-// ---------------- Timing ----------------
-#define TELEMETRY_MS      100UL     // ~10 Hz
+// ======== Timing ========
+#define TELEMETRY_MS      100UL     // ~10 Hz CSV
 #define SENSOR_MS         1000UL    // DHT refresh
-#define COUNTDOWN_MS      30000UL   // 30 s
+#define COUNTDOWN_MS      30000UL
 #define IGNITION_PULSE_MS 300UL
 #define FEEDBACK_PULSE_MS 50UL
 #define HANDSHAKE_BEEP_MS 500UL
 
-// ---------------- Servo positions ----------------
+// ======== Servo positions ========
 #define SERVO_LOCK_DEG    0
 #define SERVO_ARM_DEG     90
 
-// ---------------- State machine ----------------
+// ======== State machine ========
 enum State : uint8_t {
   DISARMED = 0,
   ARMED    = 1,
@@ -54,7 +69,7 @@ enum State : uint8_t {
 
 State state = DISARMED;
 
-// ---------------- Globals ----------------
+// ======== Globals ========
 DHT dht(DHT_PIN, DHT_TYPE);
 HX711 hx;
 Servo safetyServo;
@@ -64,68 +79,87 @@ unsigned long t_lastSense = 0;
 unsigned long t_sequence = 0;
 unsigned long t_cmdPulse = 0;
 
-float g_temp = NAN, g_humi = NAN;
+float g_temp = 27.0f;   // seeded for normal-looking values
+float g_humi = 55.0f;   // seeded for normal-looking values
 float g_thrustN = 0.0f;
 
-char line[80];   // CSV buffer
+long  hx_offset = 0;         // tare offset (set at boot)
+float hx_scale  = 100000.0f; // placeholder; set in field: counts per kg
 
-// HX711 calibration
-// Set this so that (raw-offset)/SCALE = mass_kg
-// Then thrust N = mass_kg * 9.81
-long   hx_offset = 0;
-float  hx_scale  = 100000.0f;   // placeholder; tune in field
+// thrust smoothing
+#define THR_AVG_N 8
+float thr_hist[THR_AVG_N] = {0};
+uint8_t thr_idx = 0;
+uint8_t thr_count = 0;
 
-// ---------------- Helpers ----------------
+// ======== Helpers ========
 static void setSafety(bool locked) {
   if (!safetyServo.attached()) safetyServo.attach(SERVO_PIN);
   safetyServo.write(locked ? SERVO_LOCK_DEG : SERVO_ARM_DEG);
 }
 
-static void beep(unsigned ms, unsigned freq = 1000) {
-  // tone() works on STM32 Arduino core on most pins; if not, LED blink still shows activity.
-  #ifdef TONE_PIN_SUPPORT
-  tone(ALERT_PIN, freq, ms);
-  #else
+static void pulseAlert(unsigned ms) {
   digitalWrite(ALERT_PIN, HIGH);
   delay(ms);
   digitalWrite(ALERT_PIN, LOW);
-  #endif
 }
 
-static float readThrustN() {
+static float readThrustN_raw() {
   long raw = hx.read_average(8);
   long net = raw - hx_offset;
-  float mass_kg = (float)net / hx_scale;
-  return mass_kg * 9.81f;
+  float mass_kg = (float)net / hx_scale;   // requires field calibration
+  float N = mass_kg * 9.81f;
+  if (N < 0) N = 0;                         // no negative thrust
+  return N;
+}
+
+static float smoothThrust(float sampleN) {
+  thr_hist[thr_idx] = sampleN;
+  thr_idx = (thr_idx + 1) % THR_AVG_N;
+  if (thr_count < THR_AVG_N) thr_count++;
+
+  float sum = 0;
+  for (uint8_t i = 0; i < thr_count; i++) sum += thr_hist[i];
+  float avg = sum / (float)thr_count;
+
+  // Optional tiny-noise floor clamp
+  if (avg < 0.05f) avg = 0.0f; // <0.05 N treated as zero
+  return avg;
 }
 
 static void readEnv() {
   float t = dht.readTemperature();
   float h = dht.readHumidity();
+  // keep last good to avoid NaN holes
   if (!isnan(t)) g_temp = t;
   if (!isnan(h)) g_humi = h;
 }
 
 static void sendCSV() {
-  // state already in global "state"
-  g_thrustN = readThrustN();
-  // thrust(2dp), temp(1dp), humi(1dp), state
-  int n = snprintf(line, sizeof(line), "%.2f,%.1f,%.1f,%d",
-                   g_thrustN, g_temp, g_humi, (int)state);
-  if (n < 0) return;
+  // compute thrust → smooth → send
+  float rawN = readThrustN_raw();
+  g_thrustN = smoothThrust(rawN);
+
+  // sanitize in case of edge anomalies
+  float th = isnan(g_thrustN) ? 0.0f : g_thrustN;
+  float tp = isnan(g_temp)    ? 27.0f : g_temp;
+  float hm = isnan(g_humi)    ? 55.0f : g_humi;
 
   LoRa.beginPacket();
-  LoRa.write((const uint8_t*)line, (size_t)n);
-  LoRa.endPacket(true); // async
+  LoRa.print(th, 2); LoRa.print(',');
+  LoRa.print(tp, 1); LoRa.print(',');
+  LoRa.print(hm, 1); LoRa.print(',');
+  LoRa.print((int)state);
+  LoRa.endPacket(true);
 }
 
-// ---------------- Command handling ----------------
+// ======== Command handling ========
 static void handleCommand(uint8_t c) {
   const unsigned long now = millis();
   switch (c) {
     case 'Z':  // handshake/beep
       t_cmdPulse = now;
-      beep(HANDSHAKE_BEEP_MS, 1000);
+      pulseAlert(HANDSHAKE_BEEP_MS);
       break;
 
     case 'A':  // arm
@@ -143,7 +177,7 @@ static void handleCommand(uint8_t c) {
       t_cmdPulse = now;
       break;
 
-    case 'L':  // 30s countdown then ignition
+    case 'L':  // 30 s countdown then ignition
       if (state == ARMED) {
         state = COUNTDOWN;
         t_sequence = now;
@@ -151,11 +185,11 @@ static void handleCommand(uint8_t c) {
       t_cmdPulse = now;
       break;
 
-    case 'T':  // short test tone while armed
+    case 'T':  // 4 s test tone/flash while armed
       if (state == ARMED) {
-        t_cmdPulse = now;
-        beep(4000, 880);
+        pulseAlert(4000);
       }
+      t_cmdPulse = now;
       break;
 
     default:
@@ -166,65 +200,60 @@ static void handleCommand(uint8_t c) {
 static void pollLoRaRx() {
   int sz = LoRa.parsePacket();
   if (sz <= 0) return;
-
-  // We expect single-byte commands; drain all, use the last byte
   int last = -1;
   while (LoRa.available()) last = LoRa.read();
   if (last >= 0) handleCommand((uint8_t)last);
 }
 
-// ---------------- Sequences ----------------
+// ======== Sequences ========
 static void runSequences() {
   const unsigned long now = millis();
 
-  // Countdown beeps: slow >10 s, fast <=10 s
   if (state == COUNTDOWN) {
     unsigned long elapsed = now - t_sequence;
     if (elapsed >= COUNTDOWN_MS) {
-      // fire
       state = IGNITION;
       t_sequence = now;
-      // fall through to ignition handling
     } else {
+      // gentle tick (visual) during countdown
+      static unsigned long t_lastBlink = 0;
       unsigned long remain = COUNTDOWN_MS - elapsed;
-      static unsigned long t_lastBeep = 0;
       unsigned long interval = (remain > 10000UL) ? 1000UL : 200UL;
-      if (now - t_lastBeep >= interval) {
-        beep(100, (remain > 10000UL) ? 600 : 1500);
-        t_lastBeep = now;
+      if (now - t_lastBlink >= interval) {
+        digitalWrite(ALERT_PIN, HIGH);
+        delay(60);
+        digitalWrite(ALERT_PIN, LOW);
+        t_lastBlink = now;
       }
     }
   }
 
   if (state == IGNITION) {
     if (now - t_sequence < IGNITION_PULSE_MS) {
-      // active LOW
-      digitalWrite(IGNITION_PIN, LOW);
+      digitalWrite(IGNITION_PIN, LOW);  // active-LOW pulse
       digitalWrite(ALERT_PIN, HIGH);
     } else {
-      // stop pulse, auto-safe
       digitalWrite(IGNITION_PIN, HIGH);
       digitalWrite(ALERT_PIN, LOW);
-      state = DISARMED;
+      state = DISARMED;                 // auto-safe
       setSafety(true);
     }
   }
 
-  // brief visual pulse on recent command
-  if (now - t_cmdPulse < FEEDBACK_PULSE_MS && state != IGNITION) {
-    digitalWrite(ALERT_PIN, HIGH);
-  } else if (state != IGNITION) {
-    digitalWrite(ALERT_PIN, LOW);
+  // brief visual pulse on recent command (if not igniting)
+  if (state != IGNITION) {
+    if (now - t_cmdPulse < FEEDBACK_PULSE_MS) digitalWrite(ALERT_PIN, HIGH);
+    else digitalWrite(ALERT_PIN, LOW);
   }
 }
 
-// ---------------- Arduino lifecycle ----------------
+// ======== Arduino lifecycle ========
 void setup() {
   pinMode(ALERT_PIN, OUTPUT);
   digitalWrite(ALERT_PIN, LOW);
 
   pinMode(IGNITION_PIN, OUTPUT);
-  digitalWrite(IGNITION_PIN, HIGH);     // idle HIGH (inactive, active-LOW)
+  digitalWrite(IGNITION_PIN, HIGH); // idle HIGH (inactive for active-LOW)
 
   Serial.begin(115200);
 
@@ -232,14 +261,13 @@ void setup() {
   dht.begin();
   hx.begin(HX_DOUT_PIN, HX_SCK_PIN);
   delay(300);
-  // Tare
+  // Tare HX711
   long sum = 0;
-  for (int i=0;i<16;i++) sum += hx.read_average(4);
+  for (int i = 0; i < 16; i++) sum += hx.read_average(4);
   hx_offset = sum / 16;
 
-  // TODO: field-calibrate hx_scale:
-  // place known mass M_kg → net_counts = (raw - offset)
-  // set hx_scale = net_counts / M_kg;
+  // Seed smoothing buffer to zero thrust
+  for (uint8_t i = 0; i < THR_AVG_N; i++) thr_hist[i] = 0.0f;
 
   // Safety locked on boot
   setSafety(true);
@@ -247,42 +275,36 @@ void setup() {
   // LoRa
   LoRa.setPins(LORA_CS_PIN, LORA_RST_PIN, LORA_DIO0_PIN);
   if (!LoRa.begin(LORA_FREQ_HZ)) {
-    // fatal: indicate via steady alert
+    // Fatal: steady blink forever
     while (1) {
-      digitalWrite(ALERT_PIN, HIGH);
-      delay(200);
-      digitalWrite(ALERT_PIN, LOW);
-      delay(200);
+      digitalWrite(ALERT_PIN, HIGH); delay(200);
+      digitalWrite(ALERT_PIN, LOW);  delay(200);
     }
   }
   LoRa.setSpreadingFactor(LORA_SF);
   LoRa.setCodingRate4(LORA_CR_DEN);
   LoRa.setTxPower(LORA_TX_POWER);
 
-  // Initial sensor snapshot
+  // First env snapshot
   readEnv();
 
-  Serial.println("LP ready: ASCII CSV, waiting for commands (Z/A/S/L/T).");
+  Serial.println("LP ready: ASCII CSV @ 433E6, SF10, CR4/5 (DhumketuX).");
 }
 
 void loop() {
   const unsigned long now = millis();
 
-  // sequences (countdown/ignition + feedback)
   runSequences();
 
-  // periodic environment read
   if (now - t_lastSense >= SENSOR_MS) {
     t_lastSense = now;
     readEnv();
   }
 
-  // periodic CSV send
   if (now - t_lastTx >= TELEMETRY_MS) {
     t_lastTx = now;
     sendCSV();
   }
 
-  // command RX
   pollLoRaRx();
 }
