@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>DhumketuX Mission Control — Demo + Overlay</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+  <style>
+    :root{
+      --bg-dark:linear-gradient(135deg,#1f2733 0%,#0d121c 100%);
+      --bg-light:linear-gradient(135deg,#e0e0e0 0%,#ffffff 100%);
+      --color-text:#e0e0e0; --color-accent:#00bfff;
+      --color-panel:rgba(255,255,255,.08);
+      --color-panel-border:rgba(0,191,255,.2);
+      --color-log-bg:rgba(0,0,0,.5); --color-log-text:#00bfff;
+    }
+    .day-mode{--color-text:#111; --bg-dark:var(--bg-light);
+      --color-panel:rgba(0,0,0,.05); --color-panel-border:rgba(0,0,0,.3);
+      --color-log-bg:rgba(255,255,255,.8); --color-log-text:#005691;}
+    body{background:var(--bg-dark); color:var(--color-text); font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; margin:0; padding:0; display:flex; flex-direction:column; align-items:center; min-height:100vh; transition:background .5s,color .5s;}
+    .panel,.control-panel,.metrics-header{background:var(--color-panel); backdrop-filter:blur(15px); border:1px solid var(--color-panel-border); border-radius:12px; padding:15px; box-shadow:0 4px 15px rgba(0,0,0,.5); margin:15px; transition:background .5s,border .5s,box-shadow .5s;}
+    .top-header{display:flex; justify-content:space-between; align-items:center; width:95%; max-width:1600px; padding:10px 0;}
+    .logo-placeholder{flex-basis:25%; padding-left:15px; display:flex; align-items:center; gap:15px;}
+    .countdown-container{flex-basis:50%; text-align:center;}
+    .temp-humi-monitor{flex-basis:25%; text-align:right; padding-right:15px; display:flex; justify-content:flex-end; align-items:center; gap:15px;}
+    .status-dot{height:12px; width:12px; border-radius:50%; display:inline-block; margin-right:5px; transition:background-color .3s;}
+    .status-label{font-size:.9em; color:#999;}
+    @keyframes blink-blue{0%{box-shadow:0 0 5px rgba(0,191,255,.6);}50%{box-shadow:0 0 15px var(--color-accent);}100%{box-shadow:0 0 5px rgba(0,191,255,.6);}}
+    .blinking{animation:blink-blue .8s infinite;}
+    #countdownDisplay{font-size:2.2em; font-weight:700; color:var(--color-accent); font-family:"Courier New",monospace; text-shadow:0 0 10px rgba(0,191,255,.6); padding:8px 16px; background:rgba(0,0,0,.3); border-radius:8px; display:inline-block;}
+    .temp-humi-data{font-size:1.05em; font-family:"Courier New",monospace; line-height:1.4; background:rgba(0,0,0,.2); padding:8px; border-radius:6px; display:inline-block;}
+    .dashboard-grid{display:flex; width:95%; max-width:1600px; flex-grow:1; min-height:70vh;}
+    .webcam-panel{flex:1; min-width:300px; max-width:420px; display:flex; flex-direction:column;}
+    .graph-area{flex:3; display:flex; flex-direction:column;}
+    .graph-panel{flex-grow:1; padding:10px; height:calc(100% - 70px); display:flex; flex-direction:column; background:rgba(0,0,0,.7); border:1px solid var(--color-panel-border);}
+    .metrics-header{display:flex; justify-content:space-between; align-items:center; padding:10px 20px; margin-bottom:5px; background:rgba(0,0,0,.4); border-radius:8px;}
+    .metric-label{color:#999; font-weight:300; text-transform:uppercase;}
+    .metric-value{font-size:1.4em; font-family:"Courier New",monospace;}
+    #webcam-feed{width:100%; height:auto; min-height:200px; border-radius:8px; background:#000; border:1px solid var(--color-accent);}
+    #status-display-box{margin-top:15px; padding:10px; border-radius:6px; background:var(--color-log-bg); font-family:"Courier New",monospace; color:var(--color-log-text); font-size:.9em; line-height:1.5; white-space:pre-wrap; text-align:left; flex-grow:1; border:1px solid var(--color-panel-border); overflow-y:auto; height:250px;}
+    .control-panel{width:95%; max-width:1400px; display:flex; justify-content:center; gap:16px; padding:12px; flex-wrap:wrap;}
+    .command-section{display:flex; gap:10px; align-items:center; justify-content:center; flex-wrap:wrap;}
+    .action-btn,.control-btn{padding:12px 18px; border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,.5); transition:all .1s ease-out; font-weight:700; border:1px solid var(--color-panel-border); cursor:pointer; text-transform:uppercase; text-align:center;}
+    #launchBtn{background:#ff3366; color:#fff; font-size:1.2em; padding:16px 28px; border:1px solid #ff3366; box-shadow:0 0 18px rgba(255,51,102,.9);}
+    #launchBtn:not(:disabled):hover{box-shadow:0 0 25px rgba(255,51,102,1);}
+    #testBtn{background:#ff8c00; color:#fff; border:1px solid #ff8c00;}
+    .connect-btn,.safe-btn,.arm-btn{background:var(--color-panel); color:var(--color-text); border-color:var(--color-panel-border);}
+    .connect-btn{border-color:var(--color-accent);} .safe-btn{color:#00cc66; border-color:#00cc66;} .arm-btn{color:#ffd700; border-color:#ffd700;}
+    .data-btn{border-color:var(--color-accent); color:var(--color-accent);}
+    .action-btn:disabled,.control-btn:disabled{opacity:.45; cursor:not-allowed; box-shadow:none; transform:none;}
+    .toggle{display:inline-flex; align-items:center; gap:6px; font-size:.9rem; user-select:none; cursor:pointer;}
+    .modal{display:none; position:fixed; z-index:100; inset:0; overflow:auto; background:rgba(0,0,0,.4); justify-content:center; align-items:center;}
+    .modal-content{background:rgba(255,255,255,.2); backdrop-filter:blur(10px); padding:20px; border-radius:12px; box-shadow:0 5px 20px rgba(0,0,0,.5); width:300px; text-align:center; border:1px solid rgba(255,255,255,.3);}
+    #passwordInput{width:90%; padding:10px; margin:10px 0 20px 0; border-radius:6px; border:1px solid #555; background:rgba(0,0,0,.7); color:var(--color-text); font-family:"Courier New",monospace; box-shadow:inset 0 1px 3px rgba(0,0,0,.5);}
+    /* Launch overlay */
+    #launchOverlay .modal-content{background:rgba(0,0,0,.35); border:1px solid rgba(255,255,255,.15); width:min(520px,92%); text-align:center;}
+    #launchOverlayTimer{font-size:4rem; font-family:"Courier New",monospace; color:#ffd700; text-shadow:0 0 18px rgba(255,215,0,.8); margin:10px 0 6px;}
+    #launchOverlayMsg{opacity:.9; margin-bottom:14px;}
+    #abortLaunchBtn{margin-top:10px;}
+    /* Demo settings panel */
+    #demoSettings{width:95%; max-width:1400px; display:none; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin-top:-6px;}
+    #demoSettings .panel{margin:6px 15px 15px 15px;}
+    .field{display:flex; align-items:center; justify-content:space-between; gap:10px; margin:6px 0; font-size:.95rem;}
+    .field input[type="range"]{width:60%;}
+    .field input[type="text"], .field select{width:60%; padding:6px 8px; border-radius:6px; border:1px solid var(--color-panel-border); background:rgba(0,0,0,.25); color:var(--color-text);}
+    .subtle{opacity:.85; font-size:.9rem;}
+  </style>
+</head>
+<body id="appBody">
+  <div class="top-header">
+    <div class="logo-placeholder">
+      <img src="https://placehold.co/150x40/0d121c/00BFFF?text=DhumketuX" width="150" style="border-radius:4px;border:1px solid var(--color-accent)" alt="DhumketuX"/>
+      <div>
+        <span class="status-label">GS:</span><span id="gsStatusDot" class="status-dot" style="background:red"></span>
+        <span class="status-label">LP:</span><span id="lpStatusDot" class="status-dot" style="background:red"></span>
+      </div>
+    </div>
+    <div class="countdown-container"><div id="countdownDisplay">SAFE MODE</div></div>
+    <div class="temp-humi-monitor">
+      <label class="toggle" title="Dark / Light"><input type="checkbox" id="darkModeToggle" checked/> Dark</label>
+      <label class="toggle" title="Enable demo data stream"><input type="checkbox" id="demoToggle"/> Demo Mode</label>
+      <div class="temp-humi-data">T: <span id="currentTemp">-- °C</span><br/>H: <span id="currentHumi">-- %</span></div>
+    </div>
+  </div>
+
+  <main class="dashboard-grid">
+    <div class="panel webcam-panel">
+      <h3>Live Pad Feed</h3>
+      <video id="webcam-feed" autoplay></video>
+      <h3>DEBUG/COMMAND LOG</h3>
+      <div id="status-display-box">STATUS: DISCONNECTED (GS/LP Red)</div>
+    </div>
+
+    <div class="graph-area">
+      <div class="metrics-header">
+        <div class="metric-item"><span class="metric-label">Max Thrust</span> <span class="metric-value" id="maxThrust">0.0 N</span></div>
+        <div class="metric-item"><span class="metric-label">Ignition Time</span> <span class="metric-value" id="ignitionTime">--:--:--</span></div>
+        <div class="metric-item"><span class="metric-label">Time to Peak</span> <span class="metric-value" id="timeToPeak">-- s</span></div>
+        <button id="saveDataBtn" class="action-btn data-btn">💾 SAVE DATA</button>
+      </div>
+      <div class="panel graph-panel"><canvas id="thrustChart"></canvas></div>
+    </div>
+  </main>
+
+  <div class="control-panel">
+    <div class="command-section">
+      <button id="connectBtn" class="action-btn connect-btn">1. CONNECT GS</button>
+      <button id="disconnectBtn" class="action-btn" disabled>DISCONNECT</button>
+    </div>
+    <div class="command-section">
+      <button id="safeBtn" class="control-btn safe-btn" disabled>DISARM / SAFE ('S')</button>
+      <button id="armBtn" class="control-btn arm-btn" disabled>ARM SYSTEM ('A')</button>
+    </div>
+    <div class="command-section">
+      <button id="launchBtn" class="control-btn launch-btn" disabled>LAUNCH (T-30s)</button>
+    </div>
+    <div class="command-section">
+      <button id="testBtn" class="control-btn test-btn" disabled>TEST PULSE ('T')</button>
+      <button id="demoBurstBtn" class="action-btn" disabled>Demo Burn</button>
+      <button id="clearBtn" class="action-btn">Clear Graph</button>
+    </div>
+    <div class="command-section">
+      <label class="subtle">Launch Hold
+        <select id="holdSelect">
+          <option value="10000">10 s</option>
+          <option value="20000">20 s</option>
+          <option value="30000" selected>30 s</option>
+        </select>
+      </label>
+      <button id="toggleSettingsBtn" class="action-btn">⚙ Demo Settings</button>
+    </div>
+  </div>
+
+  <section id="demoSettings" class="grid">
+    <div class="panel">
+      <h4 style="margin:0 0 6px 0;">Curve Parameters</h4>
+      <div class="field"><span>Peak Scale (×9800 N)</span><input id="peakScale" type="range" min="0.75" max="0.99" step="0.01" value="0.94"><span id="peakScaleVal">0.94</span></div>
+      <div class="field"><span>Plateau Length (ms)</span><input id="plateauLen" type="range" min="2000" max="6000" step="100" value="3000"><span id="plateauLenVal">3000</span></div>
+      <div class="field"><span>Shutdown Steepness</span><input id="shutTau" type="range" min="120" max="400" step="5" value="200"><span id="shutTauVal">200</span></div>
+      <div class="field"><span>Noise Level</span><input id="noiseLevel" type="range" min="0" max="1.5" step="0.05" value="0.7"><span id="noiseLevelVal">0.70</span></div>
+    </div>
+    <div class="panel">
+      <h4 style="margin:0 0 6px 0;">Overlay Details</h4>
+      <div class="field"><span>Pad</span><input id="padName" type="text" value="Pad A" placeholder="Pad A"></div>
+      <div class="field"><span>Engine ID</span><input id="engineId" type="text" value="DX-TEST-01" placeholder="DX-TEST-01"></div>
+      <div class="field"><span>Operator</span><input id="operatorName" type="text" value="Nahiyan" placeholder="Operator"></div>
+      <div class="subtle">These appear on the launch overlay.</div>
+    </div>
+  </section>
+
+  <!-- Full-screen Launch Overlay -->
+  <div id="launchOverlay" class="modal">
+    <div class="modal-content">
+      <h3 style="color:#FFD700;margin-top:0;">LAUNCH SEQUENCE</h3>
+      <div id="launchOverlayMeta" class="subtle" style="margin-bottom:6px;">Pad — Engine — Operator</div>
+      <div id="launchOverlayTimer">T-30.00s</div>
+      <div id="launchOverlayMsg">Stand by. Range green. Press ABORT to return to SAFE.</div>
+      <button id="abortLaunchBtn" class="action-btn safe-btn">Abort</button>
+    </div>
+  </div>
+
+  <!-- Password Modal -->
+  <div id="passwordModal" class="modal">
+    <div class="modal-content">
+      <h3 style="color:#FFD700;">CONFIRM EXECUTION</h3>
+      <p>Enter the launch authorization password:</p>
+      <input type="password" id="passwordInput" placeholder="Enter Password"/>
+      <button id="confirmExecuteBtn" class="action-btn launch-btn">Execute Command</button>
+      <button id="cancelExecuteBtn" class="action-btn safe-btn" style="margin-left:10px;">Cancel</button>
+      <p id="passwordError" style="color:#FF3366;margin-top:10px;display:none;">Invalid Password.</p>
+    </div>
+  </div>
+
+  <script>
+    // ===== Global state =====
+    let port, reader, outputStream, chart;
+    let isArmed = false, commandToExecute = null, lastGSUptime = 0, linkStatusInterval = null;
+
+    // Data storage
+    const telemetryData = [];
+    const timeLabels = [];
+    const thrustValues = [];
+
+    // Metrics
+    let maxThrustValue = 0.0, ignitionTime_ms = null, peakThrustTime_ms = null, ignitionDetected = false;
+
+    const DEFAULT_PASSWORD = "2026";
+    const LINK_TIMEOUT_MS = 2000;
+    const MAX_POINTS = 150;
+    const IGNITION_THRESHOLD = 15;
+
+    // Marker plugin state
+    const markerEvents = { ignitionIndex:null, ignitionValue:null, peakIndex:null };
+    const markerPlugin = {
+      id:"markerPlugin",
+      afterDatasetsDraw(c){
+        const {ctx} = c; const meta = c.getDatasetMeta(0);
+        if(!meta || !meta.data || !meta.data.length) return;
+        const draw = (i,color,label)=>{
+          if(i==null || !meta.data[i]) return;
+          const {x,y} = meta.data[i];
+          ctx.save(); ctx.fillStyle=color; ctx.strokeStyle=color;
+          ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2); ctx.fill();
+          ctx.font='12px "Courier New", monospace'; ctx.textAlign='left'; ctx.textBaseline='bottom';
+          ctx.fillText(label, x+6, y-8); ctx.restore();
+        };
+        if(markerEvents.ignitionIndex!=null){
+          const v = markerEvents.ignitionValue!=null?Math.round(markerEvents.ignitionValue):0;
+          draw(markerEvents.ignitionIndex,'#FF8C00',`Ign ${v} N`);
+        }
+        if(markerEvents.peakIndex!=null){
+          draw(markerEvents.peakIndex,'#FF3366',`Peak ${Math.round(maxThrustValue)} N`);
+        }
+      }
+    };
+
+    // Elements
+    const statusDisplayBox = document.getElementById("status-display-box");
+    const gsStatusDot = document.getElementById("gsStatusDot");
+    const lpStatusDot = document.getElementById("lpStatusDot");
+    const darkModeToggle = document.getElementById("darkModeToggle");
+    const demoToggle = document.getElementById("demoToggle");
+
+    const connectBtn = document.getElementById("connectBtn");
+    const disconnectBtn = document.getElementById("disconnectBtn");
+    const armBtn = document.getElementById("armBtn");
+    const safeBtn = document.getElementById("safeBtn");
+    const testBtn = document.getElementById("testBtn");
+    const launchBtn = document.getElementById("launchBtn");
+    const demoBurstBtn = document.getElementById("demoBurstBtn");
+    const clearBtn = document.getElementById("clearBtn");
+
+    const countdownDisplay = document.getElementById("countdownDisplay");
+    const passwordModal = document.getElementById("passwordModal");
+    const passwordInput = document.getElementById("passwordInput");
+    const confirmExecuteBtn = document.getElementById("confirmExecuteBtn");
+    const cancelExecuteBtn = document.getElementById("cancelExecuteBtn");
+    const passwordError = document.getElementById("passwordError");
+
+    const launchOverlay = document.getElementById("launchOverlay");
+    const launchOverlayTimer = document.getElementById("launchOverlayTimer");
+    const launchOverlayMeta = document.getElementById("launchOverlayMeta");
+    const abortLaunchBtn = document.getElementById("abortLaunchBtn");
+
+    const holdSelect = document.getElementById("holdSelect");
+    const toggleSettingsBtn = document.getElementById("toggleSettingsBtn");
+
+    const peakScaleInp = document.getElementById("peakScale");
+    const plateauLenInp = document.getElementById("plateauLen");
+    const shutTauInp = document.getElementById("shutTau");
+    const noiseLevelInp = document.getElementById("noiseLevel");
+    const peakScaleVal = document.getElementById("peakScaleVal");
+    const plateauLenVal = document.getElementById("plateauLenVal");
+    const shutTauVal = document.getElementById("shutTauVal");
+    const noiseLevelVal = document.getElementById("noiseLevelVal");
+
+    const padNameInp = document.getElementById("padName");
+    const engineIdInp = document.getElementById("engineId");
+    const operatorNameInp = document.getElementById("operatorName");
+
+    const COMMANDS = { ARM:"A", SAFE:"S", TEST:"T", LAUNCH:"L", HANDSHAKE:"Z" };
+
+    // Countdown (header)
+    let countdownTimer=null, countdownEndAt=null;
+    function startCountdown(ms){
+      stopCountdown(); countdownEndAt = Date.now()+ms;
+      countdownDisplay.style.color='#FF3366'; countdownDisplay.classList.add('blinking');
+      countdownTimer = setInterval(()=>{
+        const remaining = Math.max(0, countdownEndAt - Date.now());
+        const sec = (remaining/1000).toFixed(2);
+        countdownDisplay.textContent = `T-${sec}s`;
+        if(remaining<=0){ stopCountdown(); countdownDisplay.textContent='IGNITION'; }
+      },60);
+    }
+    function stopCountdown(){
+      if(countdownTimer) clearInterval(countdownTimer);
+      countdownTimer=null; countdownDisplay.classList.remove('blinking');
+    }
+
+    // Overlay helpers
+    function startOverlayCountdown(ms,onDone){
+      let endAt = Date.now()+ms;
+      const t = setInterval(()=>{
+        const r = Math.max(0, endAt - Date.now());
+        launchOverlayTimer.textContent = `T-${(r/1000).toFixed(2)}s`;
+        if(r<=0){ clearInterval(t); onDone&&onDone(); }
+      },33);
+      return t;
+    }
+    function showLaunchOverlay(ms){
+      launchOverlay.style.display='flex';
+      launchOverlayMeta.textContent = `${padNameInp.value} — ${engineIdInp.value} — ${operatorNameInp.value}`;
+      launchOverlayTimer.textContent = `T-${(ms/1000).toFixed(2)}s`;
+    }
+    function hideLaunchOverlay(){ launchOverlay.style.display='none'; }
+
+    // Beep cadence last 5 s
+    function startBeepCadence(totalMs){
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if(!Ctx) return;
+      const ctx = new Ctx();
+      const start = Date.now();
+      const timer = setInterval(()=>{
+        const remain = totalMs - (Date.now()-start);
+        if(remain<=0){ beep(ctx,220,.15); clearInterval(timer); return; }
+        if(remain<=5000){ beep(ctx,880,.06); }
+      },1000);
+    }
+    function beep(ctx,freq,dur){
+      try{
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.frequency.value=freq; o.type='sine'; o.connect(g); g.connect(ctx.destination);
+        g.gain.setValueAtTime(0.001,ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.2,ctx.currentTime+0.01);
+        g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+dur);
+        o.start(); o.stop(ctx.currentTime+dur);
+      }catch{}
+    }
+
+    // ===== Init =====
+    window.onload = () => {
+      initChart(); initWebcam(); initEvents();
+      updateStatusDots(false,false);
+      statusDisplayBox.textContent='STATUS: DISCONNECTED (GS/LP Red)';
+      document.getElementById('appBody').classList.toggle('day-mode', !darkModeToggle.checked);
+      // show live slider values
+      const bindVal = (inp,out,fmt=(v)=>v) => inp.addEventListener('input',()=> out.textContent = fmt(inp.value));
+      bindVal(peakScaleInp, peakScaleVal, v=>Number(v).toFixed(2));
+      bindVal(plateauLenInp, plateauLenVal);
+      bindVal(shutTauInp, shutTauVal);
+      bindVal(noiseLevelInp, noiseLevelVal, v=>Number(v).toFixed(2));
+    };
+
+    function initEvents(){
+      document.getElementById('saveDataBtn').addEventListener('click', saveCSV);
+      connectBtn.addEventListener('click', connectSerial);
+      disconnectBtn.addEventListener('click', disconnectSerial);
+      armBtn.addEventListener('click', ()=>sendCommand(COMMANDS.ARM));
+      safeBtn.addEventListener('click', ()=>sendCommand(COMMANDS.SAFE));
+      testBtn.addEventListener('click', ()=>promptForPassword(COMMANDS.TEST));
+      launchBtn.addEventListener('click', ()=>promptForPassword(COMMANDS.LAUNCH));
+      confirmExecuteBtn.addEventListener('click', authorizeAndExecute);
+      cancelExecuteBtn.addEventListener('click', hidePasswordModal);
+      passwordInput.addEventListener('keypress', e=>{ if(e.key==='Enter') authorizeAndExecute(); });
+
+      abortLaunchBtn.addEventListener('click', ()=>{
+        hideLaunchOverlay(); sendCommand(COMMANDS.SAFE);
+        countdownDisplay.textContent='ABORTED'; countdownDisplay.style.color='#FF3366';
+      });
+
+      darkModeToggle.addEventListener('change', ()=>{
+        document.getElementById('appBody').classList.toggle('day-mode', !darkModeToggle.checked);
+      });
+
+      toggleSettingsBtn.addEventListener('click', ()=>{
+        const el = document.getElementById('demoSettings');
+        el.style.display = el.style.display==='grid' ? 'none' : 'grid';
+      });
+
+      demoToggle.addEventListener('change', ()=>{
+        const on = demoToggle.checked;
+        demoBurstBtn.disabled = !on; clearBtn.disabled = false;
+        if(on){ startDemoIdle(); logPacket('SYS','Demo Mode enabled. Streaming synthetic telemetry.'); updateStatusDots(true,true); }
+        else { stopDemo(); updateStatusDots(false,false); logPacket('SYS','Demo Mode disabled.'); }
+      });
+      demoBurstBtn.addEventListener('click', ()=>triggerDemoBurn());
+      clearBtn.addEventListener('click', clearGraph);
+    }
+
+    function updateStatusDots(gs,lp){
+      gsStatusDot.style.backgroundColor = gs?'lime':'red';
+      lpStatusDot.style.backgroundColor = lp?'lime':'red';
+      if(gs) countdownDisplay.style.color='#00cc66';
+    }
+    function checkLinkStatus(){
+      const now = Date.now();
+      if(now-lastGSUptime>LINK_TIMEOUT_MS){
+        gsStatusDot.style.backgroundColor='red';
+        lpStatusDot.style.backgroundColor='red';
+        countdownDisplay.textContent='LINK LOST';
+        countdownDisplay.style.color='#ff3366';
+      }else gsStatusDot.style.backgroundColor='lime';
+    }
+    function logPacket(type,payload){
+      const t = new Date().toLocaleTimeString('en-US');
+      const color = type==='TX'?'#FFD700':type==='RX'?'#00FFC0':type==='SYS'?'#00BFFF':'#FF3366';
+      statusDisplayBox.innerHTML += `\n[${t}] <span style="color:${color};">${type}</span>: ${payload}`;
+      statusDisplayBox.scrollTop = statusDisplayBox.scrollHeight;
+    }
+
+    // Password modal
+    function promptForPassword(cmd){
+      if(!isArmed && cmd!==COMMANDS.ARM){ logPacket('WARN','Please ARM the system first before firing/testing.'); return; }
+      if(launchBtn.disabled && cmd===COMMANDS.LAUNCH) return;
+      commandToExecute=cmd; passwordInput.value=''; passwordError.style.display='none';
+      passwordModal.style.display='flex'; passwordInput.focus();
+    }
+    function hidePasswordModal(){ commandToExecute=null; passwordModal.style.display='none'; }
+    function authorizeAndExecute(){
+      if(passwordInput.value===DEFAULT_PASSWORD){
+        hidePasswordModal();
+        if(commandToExecute===COMMANDS.LAUNCH){
+          const holdMs = parseInt(holdSelect.value||'30000',10);
+          beginLaunchSequence(holdMs);
+        } else sendCommand(commandToExecute);
+      } else passwordError.style.display='block';
+    }
+
+    function beginLaunchSequence(ms){
+      showLaunchOverlay(ms);
+      countdownDisplay.textContent='COUNTDOWN'; countdownDisplay.style.color='#FF3366';
+      startBeepCadence(ms);
+      startOverlayCountdown(ms, ()=>{
+        hideLaunchOverlay();
+        if(demoToggle.checked) triggerDemoBurn();
+        else sendCommand(COMMANDS.LAUNCH);
+      });
+    }
+
+    // Web Serial
+    async function connectSerial(){
+      if(!('serial' in navigator)){ statusDisplayBox.textContent='STATUS: ERROR - Web Serial API not supported in this browser.'; return; }
+      try{
+        port = await navigator.serial.requestPort();
+        await port.open({ baudRate:115200 });
+        connectBtn.disabled=true; disconnectBtn.disabled=false;
+        updateStatusDots(true,false);
+        [armBtn,safeBtn,testBtn,launchBtn].forEach(b=>b.disabled=false);
+        linkStatusInterval = setInterval(checkLinkStatus,500);
+
+        const td = new TextDecoderStream(); port.readable.pipeTo(td.writable); reader = td.readable.getReader();
+        const te = new TextEncoderStream(); te.readable.pipeTo(port.writable); outputStream=te.writable;
+
+        readLoop();
+        logPacket('SYS','GS Connected to USB Serial. Sending Handshake...');
+        const w = outputStream.getWriter(); await w.write(COMMANDS.HANDSHAKE+'\n'); w.releaseLock(); logPacket('TX',COMMANDS.HANDSHAKE);
+      }catch(err){
+        console.error(err); logPacket('ERR',`Connection failed: ${err.message}`);
+        connectBtn.disabled=false; updateStatusDots(false,false); clearInterval(linkStatusInterval);
+      }
+    }
+    async function disconnectSerial(){
+      try{ if(reader) await reader.releaseLock(); if(port) await port.close(); }catch(e){}
+      connectBtn.disabled=false; disconnectBtn.disabled=true;
+      [armBtn,safeBtn,testBtn,launchBtn].forEach(b=>b.disabled=true);
+      updateStatusDots(false,false); logPacket('SYS','Disconnected.');
+    }
+    async function readLoop(){
+      while(true){
+        try{
+          const {value,done} = await reader.read(); if(done) break;
+          if(value){ value.split('\n').filter(s=>s.trim().length>0).forEach(line=>processTelemetry(line.trim())); }
+        }catch(err){ console.error('read error',err); break; }
+      }
+    }
+
+    // Telemetry & chart
+    function processTelemetry(line){
+      if(!line.includes(',')){ logPacket('RX',line); return; }
+      const p = line.split(',');
+      if(p.length<5){ logPacket('WARN','Incomplete CSV packet received.'); return; }
+      const d = { thrust:parseFloat(p[0]), temp:parseFloat(p[1]), humi:parseFloat(p[2]), uptime:parseInt(p[3]), armedState:parseInt(p[4]) };
+
+      lastGSUptime = Date.now(); updateUIState(d.armedState);
+
+      if(!isNaN(d.thrust)){
+        const now = new Date(); const stamp = now.toLocaleTimeString('en-US');
+        detectIgnition(d.thrust, now.getTime());
+        detectPeakThrust(d.thrust, now.getTime());
+
+        telemetryData.push({ time:stamp, thrust:d.thrust, temp:d.temp, humi:d.humi, armedState:d.armedState, timestamp_ms:now.getTime() });
+        timeLabels.push(stamp); thrustValues.push(d.thrust);
+        if(timeLabels.length>MAX_POINTS){ timeLabels.shift(); thrustValues.shift(); }
+        chart.data.labels = timeLabels; chart.data.datasets[0].data = thrustValues; chart.update('none');
+      }
+      if(!isNaN(d.temp) && !isNaN(d.humi)){
+        document.getElementById('currentTemp').textContent = `${d.temp.toFixed(1)} °C`;
+        document.getElementById('currentHumi').textContent = `${d.humi.toFixed(1)} %`;
+      }
+    }
+    function updateUIState(state){
+      // 0 SAFE, 1 ARMED, 2 COUNTDOWN, 3 IGNITION/BURN
+      lpStatusDot.style.backgroundColor='lime';
+      launchBtn.disabled=true; testBtn.disabled=true; armBtn.disabled=true; safeBtn.disabled=true; isArmed=false;
+      if(state===0){ countdownDisplay.textContent='SAFE MODE'; countdownDisplay.style.color='#00cc66'; armBtn.disabled=false; }
+      else if(state===1){ isArmed=true; countdownDisplay.textContent='ARMED / READY'; countdownDisplay.style.color='#ffd700'; launchBtn.disabled=false; testBtn.disabled=false; safeBtn.disabled=false; }
+      else if(state===2){ countdownDisplay.textContent='COUNTDOWN T-xx'; countdownDisplay.style.color='#ff3366'; safeBtn.disabled=false; }
+      else if(state===3){ countdownDisplay.textContent='IGNITION PULSE'; countdownDisplay.style.color='#ff3366'; safeBtn.disabled=false; }
+    }
+    function initChart(){
+      const ctx = document.getElementById('thrustChart').getContext('2d');
+      chart = new Chart(ctx,{
+        type:'line',
+        data:{ labels:timeLabels, datasets:[{ label:'Thrust (N)', data:thrustValues, borderColor:'#00BFFF', borderWidth:2, pointRadius:0, fill:false, tension:0.08 }]},
+        options:{ responsive:true, maintainAspectRatio:false, animation:false,
+          scales:{ y:{ beginAtZero:true, title:{display:true,text:'Thrust (N)',color:'#00BFFF'}, grid:{color:'rgba(0,191,255,.1)'}, ticks:{color:'#00BFFF'}},
+                  x:{ title:{display:true,text:'Time',color:'#00BFFF'}, grid:{color:'rgba(0,191,255,.1)'}, ticks:{color:'#00BFFF'}}},
+          plugins:{ legend:{display:false}, tooltip:{mode:'index', intersect:false}}
+        },
+        plugins:[markerPlugin]
+      });
+    }
+    async function sendCommand(cmd){
+      // Demo emulation
+      if(demoToggle.checked){
+        if(cmd===COMMANDS.ARM){ demoArmedState=1; processTelemetry(formatDemoCSV(0,demoAmbientT,demoAmbientH,demoUptime,demoArmedState)); logPacket('SYS','[DEMO] System armed.'); }
+        else if(cmd===COMMANDS.SAFE){ demoArmedState=0; processTelemetry(formatDemoCSV(0,demoAmbientT,demoAmbientH,demoUptime,demoArmedState)); logPacket('SYS','[DEMO] System disarmed.'); }
+        else if(cmd===COMMANDS.TEST){ triggerDemoBurn(1800); }
+        else if(cmd===COMMANDS.LAUNCH){ triggerDemoBurn(); }
+        return;
+      }
+      if(!port || !outputStream){ logPacket('ERR','Not connected. Cannot send command.'); return; }
+      try{ const w = outputStream.getWriter(); await w.write(cmd+'\n'); w.releaseLock(); logPacket('TX',cmd); }
+      catch(err){ console.error(err); logPacket('ERR',`Command send failed: ${err.message}`); }
+    }
+
+    function detectIgnition(thrust, tMs){
+      if(!ignitionDetected && thrust>IGNITION_THRESHOLD){
+        ignitionTime_ms = tMs;
+        document.getElementById('ignitionTime').textContent = new Date(ignitionTime_ms).toLocaleTimeString('en-US');
+        document.getElementById('ignitionTime').style.color='#ff3366';
+        ignitionDetected=true;
+        markerEvents.ignitionIndex = timeLabels.length-1;
+        markerEvents.ignitionValue = thrust;
+        logPacket('SYS', `*** IGNITION DETECTED at T=${document.getElementById('ignitionTime').textContent} ***`);
+      }
+    }
+    function detectPeakThrust(thrust, tMs){
+      if(thrust>maxThrustValue){
+        maxThrustValue = thrust; peakThrustTime_ms = tMs;
+        document.getElementById('maxThrust').textContent = `${maxThrustValue.toFixed(2)} N`;
+        document.getElementById('maxThrust').style.color='#ff3366';
+        if(ignitionTime_ms!==null){
+          const ttp = (peakThrustTime_ms - ignitionTime_ms)/1000;
+          document.getElementById('timeToPeak').textContent = `${ttp.toFixed(2)} s`;
+          document.getElementById('timeToPeak').style.color='#ff3366';
+        }
+        markerEvents.peakIndex = timeLabels.length-1;
+      }
+    }
+    function initWebcam(){
+      const el = document.getElementById('webcam-feed');
+      if(navigator.mediaDevices && navigator.mediaDevices.getUserMedia){
+        navigator.mediaDevices.getUserMedia({video:true}).then(s=>{ el.srcObject=s; })
+        .catch(()=>{ el.outerHTML = '<div style="background:#222;color:#aaa;padding:50px;border-radius:8px;border:1px solid var(--color-accent);">WEBCAM ERROR: Feed unavailable.</div>'; });
+      }
+    }
+    function saveCSV(){
+      if(telemetryData.length===0){ logPacket('WARN','No data collected yet!'); return; }
+      let csv = `DhumketuX Engine Test Report\n`;
+      csv += `Max Thrust (N):,${maxThrustValue.toFixed(2)}\n`;
+      csv += `Ignition Time (Local):,${ignitionTime_ms!==null?new Date(ignitionTime_ms).toLocaleTimeString('en-US'):'N/A'}\n`;
+      if(ignitionTime_ms!==null){ const ttp=(peakThrustTime_ms-ignitionTime_ms)/1000; csv += `Time to Peak (s):,${ttp.toFixed(2)}\n`; }
+      else csv += `Time to Peak (s):,N/A\n`;
+      csv += `\nTime,Thrust (N),Temperature (°C),Humidity (%),LP_State (0-3)\n`;
+      telemetryData.forEach(r=>{ csv += `${r.time},${r.thrust.toFixed(2)},${r.temp.toFixed(1)},${r.humi.toFixed(1)},${r.armedState}\n`; });
+      const blob = new Blob([csv],{type:'text/csv;charset=utf-8'}); saveAs(blob, `DhumketuX_Test_Data_${new Date().toISOString().replace(/[:.]/g,'-')}.csv`);
+      logPacket('SYS','DATA SAVED as CSV.');
+    }
+    function clearGraph(){
+      timeLabels.length=0; thrustValues.length=0; telemetryData.length=0;
+      maxThrustValue=0; ignitionTime_ms=null; peakThrustTime_ms=null; ignitionDetected=false;
+      markerEvents.ignitionIndex=null; markerEvents.ignitionValue=null; markerEvents.peakIndex=null;
+      document.getElementById('maxThrust').textContent='0.0 N';
+      document.getElementById('ignitionTime').textContent='--:--:--';
+      document.getElementById('timeToPeak').textContent='-- s';
+      chart.update('none'); logPacket('SYS','Graph cleared.');
+    }
+
+    // ===== Demo mode =====
+    let demoInterval=null, demoArmedState=0, demoUptime=0, demoAmbientT=28.0, demoAmbientH=65.0;
+    function startDemoIdle(){
+      stopDemo();
+      demoInterval=setInterval(()=>{
+        demoUptime+=100; demoAmbientT += (Math.random()-0.5)*0.05; demoAmbientH += (Math.random()-0.5)*0.1;
+        processTelemetry(formatDemoCSV(0,demoAmbientT,demoAmbientH,demoUptime,demoArmedState));
+      },100);
+    }
+    function stopDemo(){ if(demoInterval) clearInterval(demoInterval); demoInterval=null; demoArmedState=0; }
+    function formatDemoCSV(thrust,temp,humi,uptime,state){ return `${thrust.toFixed(2)},${temp.toFixed(2)},${humi.toFixed(2)},${Math.floor(uptime)},${state}`; }
+
+    function triggerDemoBurn(totalDurationMs=7000){
+      const rand=(a,b)=>Math.random()*(b-a)+a;
+      const randn=(mu=0,s=1)=>{ let u=0,v=0; while(u===0)u=Math.random(); while(v===0)v=Math.random(); return mu + s*Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); };
+
+      // parameters from sliders
+      const peakScale = Number(peakScaleInp.value||0.94);   // ×9800
+      const plateauLen = Number(plateauLenInp.value||3000); // ms
+      const shutTau = Number(shutTauInp.value||200);        // decay constant
+      const nl = Number(noiseLevelInp.value||0.7);          // noise multiplier
+
+      const ignitionDelay = rand(1890,2300);
+      const tPeak = 2100;
+      const plateauEnd = tPeak + plateauLen;
+      const shutdownStart = plateauEnd + 200;
+      const tailEnd = totalDurationMs + plateauLen*0.2;
+      const dt = 40;
+
+      const peakN = 9800 * rand(0.88,0.97) * (peakScale/0.94);
+      const plateauLevel = peakN * rand(0.88,0.94);
+
+      demoArmedState=2;
+      processTelemetry(formatDemoCSV(0,demoAmbientT,demoAmbientH,demoUptime,demoArmedState));
+      startCountdown(ignitionDelay);
+
+      if(demoInterval) clearInterval(demoInterval);
+      const t0 = Date.now();
+
+      // reset markers
+      markerEvents.ignitionIndex=markerEvents.ignitionValue=markerEvents.peakIndex=null;
+      ignitionDetected=false; maxThrustValue=0;
+
+      demoInterval=setInterval(()=>{
+        const t = Date.now()-t0; demoUptime+=dt;
+        demoAmbientT += rand(-0.03,0.05); demoAmbientH += rand(-0.08,0.08);
+        let thrust=0; const state = t<ignitionDelay ? 2 : 3;
+        const noise = s=>randn(0,s*nl);
+
+        if(t<ignitionDelay){
+          thrust = Math.max(0, noise(3));
+        } else if(t<=tPeak){
+          const ti = t - ignitionDelay;
+          const R = ti / (tPeak - ignitionDelay);
+          const smooth = R*R*(3-2*R);
+          const overshoot = 1 + rand(0.02,0.06);
+          thrust = peakN * Math.min(overshoot*Math.pow(smooth,1.1), overshoot) + noise(peakN*0.008) + Math.sin(ti*0.1)*peakN*0.003*nl;
+        } else if(t<=plateauEnd){
+          const ti = t - tPeak;
+          const decay = Math.exp(-ti/6000);
+          thrust = plateauLevel*decay + Math.sin(t*0.02)*peakN*0.01*nl + noise(peakN*0.006);
+        } else if(t<=shutdownStart+800){
+          const ti = t - shutdownStart;
+          thrust = Math.max(0, plateauLevel*Math.exp(-ti/shutTau) + noise(40));
+        } else if(t<=tailEnd){
+          const ti = t - (shutdownStart + 800);
+          thrust = Math.max(0, peakN*0.06*Math.exp(-ti/300) + noise(10) + 3);
+        }
+
+        const temp = demoAmbientT + (state===3 ? rand(3.0,7.0) : rand(-0.1,0.2));
+        const humi = Math.max(20, demoAmbientH + (state===3 ? rand(-0.6,-0.15) : rand(-0.05,0.05)));
+        processTelemetry(formatDemoCSV(thrust,temp,humi,demoUptime,state));
+
+        if(t>tailEnd+300){
+          clearInterval(demoInterval);
+          stopCountdown(); countdownDisplay.textContent='SAFE MODE'; countdownDisplay.style.color='#00cc66';
+          startDemoIdle();
+        }
+      },dt);
+    }
+
+    // ===== End Demo =====
+  </script>
+</body>
+</html>
