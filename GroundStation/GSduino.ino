@@ -1,180 +1,227 @@
-#include <SPI.h> // Required for LoRa module communication
-#include <LoRa.h> // The standard LoRa library
+/**
+ * @file GS_Receiver.ino
+ * @brief DhumketuX Ground Station Unit (GS) Firmware
+ *
+ * This sketch acts as a reliable, non-blocking bi-directional bridge between the
+ * LoRa link (receiving binary telemetry) and the PC's USB Serial (for Web Serial UI).
+ *
+ * Features Added:
+ * - Appends GS uptime timestamp to telemetry for Web UI link monitoring (>2s timeout).
+ * - Updated 'I' command description to reflect 300ms ignition pulse requirement.
+ *
+ * Constraints: Strictly prohibits the use of the 'String' object.
+ */
 
-// I. ARCHITECTURE & CONSTRAINTS:
-// Strict adherence to C-style strings (char arrays) is maintained.
-// The String class is explicitly prohibited to ensure high efficiency and prevent memory fragmentation.
-// All logic is non-blocking (except the initial LoRa setup halt).
+#include <SPI.h>
+#include <LoRa.h> // Standard LoRa Library
 
-// II. HARDWARE & PINOUT:
-const int CS_PIN = 10;     // LoRa SPI NSS/CS -> D10 (Hardware SPI SS)
-const int RST_PIN = 9;     // LoRa SPI RST -> D9
-const int IRQ_PIN = 2;     // LoRa SPI DIO0 (Interrupt) -> D2
-const int STATUS_LED_PIN = 8; // Status LED -> D8
+// --- I. Configuration & Constants ---
 
-// LoRa Configuration Parameters
-const long LORA_FREQUENCY = 433E6; // LoRa frequency (e.g., 433MHz)
-const int TX_POWER = 14;           // LoRa transmission power (dBm)
-const int SPREADING_FACTOR = 10;   // LoRa spreading factor (SF)
-const int SYNC_WORD = 0x12;        // Common sync word for LoRa network
+// LoRa Pinout (Hardware SPI for speed)
+#define LORA_CS_PIN         10 // D10: Chip Select (NSS)
+#define LORA_RST_PIN        9  // D9: Reset
+#define LORA_DIO0_PIN       2  // D2: DIO0 (Interrupt for packet detection)
 
-// III. PROTOCOL & BI-DIRECTIONAL BRIDGE:
-// The Telemetry struct must match the Launch Pad's definition exactly for binary compatibility.
-typedef struct {
-    float thrust_kPa;
-    float temperature_C;
-    float humidity_perc;
-} Telemetry_t;
+// Status Feedback
+#define STATUS_LED_PIN      7  // D7: Status/Alert LED
+#define LED_FLASH_DURATION  50L // 50ms pulse for activity confirmation
 
-// IV. FAIL-SAFE FEEDBACK & LED BLINKING LOGIC:
-const unsigned long LED_BLINK_DURATION = 50; // Milliseconds to keep the LED on for a visual confirmation
-unsigned long ledOffTime = 0; // Tracks the time when the LED should be turned off
+// LoRa Parameters (Must match Launch Pad Unit (LPU) settings)
+#define LORA_FREQUENCY      433E6
+#define LORA_TX_POWER       20 // Max power (20dBm) for robustness
 
-// Buffer for serializing Telemetry data (must be large enough for the string format)
-// Format: "Thrust:XX.XX,Temp:YY.Y,Humi:ZZ.Z" (approx 40 chars needed)
-const size_t SERIAL_BUFFER_SIZE = 64;
-char serialBuffer[SERIAL_BUFFER_SIZE];
+// System Timers
+#define RX_CHECK_INTERVAL   10L  // Check for incoming LoRa packets every 10ms
+#define TX_CHECK_INTERVAL   10L  // Check for incoming Serial commands every 10ms
+
+// --- II. Data Structures ---
+
+// Telemetry struct must match the LPU's packed struct exactly for reliable binary transfer
+struct __attribute__((packed)) Telemetry_t {
+    float thrust;
+    float temperature;
+    float humidity;
+    int8_t isArmed;     // System state (0: Disarmed, 1: Armed, 2: Ignition)
+    uint16_t checksum;
+};
+
+// --- III. Global Variables ---
+
+// Non-blocking timer variables
+unsigned long lastRxCheck = 0;
+unsigned long lastTxCheck = 0;
+unsigned long ledOffTime = 0; // Tracks when to turn the LED off
+unsigned long lastTelemetryTime = 0; // NEW: Timestamp of the last successful telemetry packet received.
+
+// Buffer for serial output (max length 64 bytes)
+char serialBuffer[64];
+Telemetry_t rx_telemetry;
+
+// --- IV. Peripheral Management Functions ---
 
 /**
- * @brief Triggers the status LED to blink briefly.
- * This function is non-blocking. The LED state is managed by updateStatusLED().
+ * @brief Toggles the status LED briefly to confirm communication activity.
  */
-void triggerStatusLED() {
+void flashStatusLED() {
     digitalWrite(STATUS_LED_PIN, HIGH);
-    ledOffTime = millis() + LED_BLINK_DURATION;
+    ledOffTime = millis() + LED_FLASH_DURATION;
 }
 
 /**
- * @brief Manages the non-blocking turning off of the status LED.
+ * @brief Manages the status LED to turn it off after a short flash duration.
  */
-void updateStatusLED() {
-    if (digitalRead(STATUS_LED_PIN) == HIGH && millis() > ledOffTime) {
+void handleLEDStatus() {
+    unsigned long currentMillis = millis();
+    if (ledOffTime > 0 && currentMillis >= ledOffTime) {
         digitalWrite(STATUS_LED_PIN, LOW);
+        ledOffTime = 0; // Reset timer
     }
 }
 
 /**
- * @brief Implements non-blocking checks for LoRa packet reception and serialization.
- * (LoRa RX -> PC Serial TX)
+ * @brief Checks the received telemetry packet's checksum for integrity.
+ * @param data Pointer to the Telemetry_t struct.
+ * @return true if checksum is valid, false otherwise.
  */
-void handleLoRaRx() {
-    // Check if a packet has arrived
+bool verifyChecksum(const Telemetry_t* data) {
+    uint16_t receivedChecksum = data->checksum;
+    uint16_t calculatedSum = 0;
+    const uint8_t* byteData = (const uint8_t*)data;
+
+    // Calculate checksum over all bytes EXCEPT the last two (which hold the checksum itself)
+    for (size_t i = 0; i < sizeof(Telemetry_t) - sizeof(uint16_t); ++i) {
+        calculatedSum ^= byteData[i];
+    }
+
+    return receivedChecksum == calculatedSum;
+}
+
+// --- V. Bi-Directional Bridge Functions ---
+
+/**
+ * @brief Non-blocking check for incoming LoRa telemetry packets (LoRa RX -> PC TX).
+ */
+void checkLoRaRx() {
     int packetSize = LoRa.parsePacket();
 
-    if (packetSize) {
-        // 1. Validate packet size against the expected struct size
-        if (packetSize == sizeof(Telemetry_t)) {
-            Telemetry_t telemetry;
+    if (packetSize == sizeof(Telemetry_t)) {
+        // Read the binary struct directly into the global variable
+        LoRa.readBytes((uint8_t*)&rx_telemetry, sizeof(Telemetry_t));
 
-            // 2. Read the entire binary struct directly into the local variable
-            LoRa.readBytes((byte*)&telemetry, sizeof(Telemetry_t));
-
-            // 3. Serialize data into the required C-string format
-            // Format: "Thrust:XX.XX,Temp:YY.Y,Humi:ZZ.Z"
-            // snprintf is used instead of the String object or concatenation.
-            int len = snprintf(
-                serialBuffer,
-                SERIAL_BUFFER_SIZE,
-                "Thrust:%.2f,Temp:%.1f,Humi:%.1f",
-                telemetry.thrust_kPa,
-                telemetry.temperature_C,
-                telemetry.humidity_perc
-            );
-
-            if (len > 0 && len < SERIAL_BUFFER_SIZE) {
-                // 4. Transmit serialized data over USB Serial
-                Serial.println(serialBuffer);
-                triggerStatusLED(); // Signal successful RX
-            } else {
-                // Handle serialization error
-                Serial.println("RX-Error: Buffer overflow or serialization failed.");
-            }
-        } else {
-            // Packet size mismatch: read remaining bytes to clear the buffer
-            while (LoRa.available()) {
-                LoRa.read();
-            }
-            Serial.println("RX-Error: Size mismatch.");
+        // 1. Checksum Verification
+        if (!verifyChecksum(&rx_telemetry)) {
+            Serial.println("WARN: Checksum failed.");
+            return;
         }
+
+        // 2. NEW: Record time of last successful packet
+        lastTelemetryTime = millis(); 
+        
+        // 3. Telemetry Serialization (Strictly using C-style snprintf)
+        // Format: "Thrust:XX.XX,Temp:YY.Y,Humi:ZZ.Z,Time:TTTTTTTT\n"
+        snprintf(serialBuffer, sizeof(serialBuffer),
+                 "Thrust:%.2f,Temp:%.1f,Humi:%.1f,Time:%lu\n",
+                 rx_telemetry.thrust,
+                 rx_telemetry.temperature,
+                 rx_telemetry.humidity,
+                 lastTelemetryTime); // Added GS uptime timestamp for link monitoring
+
+        // 4. Output to PC Serial
+        Serial.print(serialBuffer);
+
+        // 5. Feedback
+        flashStatusLED();
     }
 }
 
 /**
- * @brief Implements non-blocking checks for PC Serial command reception and LoRa transmission.
- * (PC Serial RX -> LoRa TX)
+ * @brief Non-blocking check for incoming Serial command characters (PC RX -> LoRa TX).
  */
-void handleSerialTx() {
-    // Check for incoming data in the Serial buffer
-    if (Serial.available() > 0) {
-        char command = Serial.read();
+void checkSerialTx() {
+    // Check if any data is available on the USB Serial port
+    if (Serial.available()) {
+        char command = (char)Serial.read();
 
-        // Check if the received character is one of the valid commands
+        // Check if the received character is a valid command
         if (command == 'A' || command == 'S' || command == 'T' || command == 'I') {
-
-            // 1. Begin LoRa packet (unaddressed)
-            LoRa.beginPacket(0);
-
-            // 2. Write the single command character
+            
+            // 1. LoRa Transmission
+            LoRa.beginPacket();
             LoRa.write(command);
+            LoRa.endPacket();
 
-            // 3. End packet and transmit (true ensures a non-blocking transmission check)
-            if (LoRa.endPacket(true)) {
-                Serial.print("TX Command Sent: ");
-                Serial.println(command);
-                triggerStatusLED(); // Signal successful TX
-            } else {
-                Serial.println("TX-Error: LoRa transmission failed.");
-            }
-        } else {
-            // Acknowledge receipt of an unhandled character
-            Serial.print("TX-Error: Unknown Command (");
-            Serial.print(command);
-            Serial.println(").");
+            // 2. Console Echo (Confirmation) using snprintf for C-style compliance
+            if (command == 'A') { snprintf(serialBuffer, sizeof(serialBuffer), "TX Command: A (ARM)\n"); }
+            else if (command == 'S') { snprintf(serialBuffer, sizeof(serialBuffer), "TX Command: S (SAFE)\n"); }
+            else if (command == 'T') { snprintf(serialBuffer, sizeof(serialBuffer), "TX Command: T (TEST Telemetry)\n"); }
+            // Command 'I' now reflects the 300ms pulse requirement
+            else if (command == 'I') { snprintf(serialBuffer, sizeof(serialBuffer), "TX Command: I (IGNITE 300ms PULSE)\n"); } 
+            
+            Serial.print(serialBuffer);
+
+            // 3. Feedback
+            flashStatusLED();
         }
+        // Drain any remaining buffered bytes, though typically only one is sent per command.
+        while (Serial.available()) Serial.read();
     }
 }
 
+// --- VI. Setup and Loop ---
 
 void setup() {
-    // 1. Initialize Serial Communication
-    Serial.begin(115200);
-    // Wait for serial port to connect (required for Arduino Leonardo/Micro)
-    while (!Serial);
-    Serial.println("DhumketuX GS Receiver Initializing...");
-
-    // 2. Configure Pin Modes
+    // 1. Pin Initialization
     pinMode(STATUS_LED_PIN, OUTPUT);
-    digitalWrite(STATUS_LED_PIN, LOW);
+    digitalWrite(STATUS_LED_PIN, LOW); // Start with LED off
 
-    // 3. LoRa Setup (with fail-safe halt)
-    LoRa.setPins(CS_PIN, RST_PIN, IRQ_PIN);
+    // 2. Serial Initialization (Must match LPU speed for debugging)
+    Serial.begin(115200);
+    delay(500);
+    Serial.println("\n*** DhumketuX GS Receiver Booting (Link Monitor Active) ***");
 
+    // 3. LoRa Initialization (Fail-Safe Implementation)
+    Serial.print("Initializing LoRa...");
+    
+    // Set explicit pins for the LoRa module
+    LoRa.setPins(LORA_CS_PIN, LORA_RST_PIN, LORA_DIO0_PIN);
+    
+    // Attempt to start LoRa module
     if (!LoRa.begin(LORA_FREQUENCY)) {
-        Serial.println("LoRa initialization FAILED. HALTING MCU.");
-        // FAIL-SAFE: Halt the MCU and rapidly blink the status LED
-        while (1) {
-            digitalWrite(STATUS_LED_PIN, HIGH);
-            delay(100);
-            digitalWrite(STATUS_LED_PIN, LOW);
+        Serial.println("FATAL: LoRa INIT FAILED! Check wiring and module.");
+        // Implement fail-safe halt with rapid flashing
+        while (1) { 
+            digitalWrite(STATUS_LED_PIN, HIGH); 
+            delay(100); 
+            digitalWrite(STATUS_LED_PIN, LOW); 
             delay(100);
         }
     }
+    Serial.println("SUCCESS.");
 
-    // Apply additional LoRa settings
-    LoRa.setTxPower(TX_POWER);
-    LoRa.setSpreadingFactor(SPREADING_FACTOR);
-    LoRa.setSyncWord(SYNC_WORD);
+    // Configure LoRa parameters (must match LPU for communication)
+    LoRa.setTxPower(LORA_TX_POWER);
+    LoRa.setSpreadingFactor(10);
+    LoRa.setCodingRate4(5);
+    LoRa.setSignalBandwidth(125E3);
 
-    Serial.println("LoRa Ground Station Ready.");
+    Serial.println("Ground Station Ready. Listening for Telemetry...");
 }
 
 void loop() {
-    // Non-blocking check for incoming LoRa packets and serial transmission
-    handleLoRaRx();
+    unsigned long currentMillis = millis();
 
-    // Non-blocking check for incoming Serial commands and LoRa transmission
-    handleSerialTx();
+    // 1. Non-blocking LoRa Reception Check
+    if (currentMillis - lastRxCheck >= RX_CHECK_INTERVAL) {
+        lastRxCheck = currentMillis;
+        checkLoRaRx();
+    }
 
-    // Non-blocking update of the Status LED state
-    updateStatusLED();
+    // 2. Non-blocking Serial Command Check
+    if (currentMillis - lastTxCheck >= TX_CHECK_INTERVAL) {
+        lastTxCheck = currentMillis;
+        checkSerialTx();
+    }
+    
+    // 3. LED Status Management
+    handleLEDStatus();
 }
