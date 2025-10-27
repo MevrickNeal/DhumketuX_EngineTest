@@ -7,7 +7,7 @@
 
 enum lauchState {
   IDLE,
-  AMRED,
+  ARMED,
   COUNTDOWN,
   LAUNCHED,
 };
@@ -42,6 +42,8 @@ void loop() {
   if (Serial.available()) {
     commandToSend = Serial.readStringUntil('\n');
     commandToSend.trim();
+    if(commandToSend == "ARM") state = ARMED;
+    if(commandToSend == "LAUNCH") state = LAUNCHED;
     sendCommand(commandToSend);
   }
 
