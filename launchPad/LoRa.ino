@@ -17,7 +17,7 @@ void incoming() {
     }
 
     else if (incoming == "ARM") {
-      state = AMRED;
+      state = ARMED;
       servo.write(0);  //change the direction if needed==================================
     }
 
@@ -34,6 +34,7 @@ void sendStatus() {
   Serial.println("Responding with OK and load cell value...");
   check_weight();
   LoRa.beginPacket();
-  (calibrated) ? LoRa.print("OK,") : LoRa.print("NO,") LoRa.print(weight, 1);  // send 2 decimal precision
+  (calibrated) ? LoRa.print("OK,") : LoRa.print("NO,");
+  LoRa.print(weight, 1);  // send 2 decimal precision
   LoRa.endPacket();
 }
