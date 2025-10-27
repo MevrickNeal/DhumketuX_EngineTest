@@ -33,11 +33,11 @@
 #define HX_DOUT_PIN       PB0
 #define HX_SCK_PIN        PB1
 
-#define DHT_PIN           PA8
+#define DHT_PIN           PB15
 #define DHT_TYPE          DHT22
 
 #define SERVO_PIN         PA9
-#define IGNITION_PIN      PC13      // Active-LOW relay
+#define IGNITION_PIN      PA1      // Active-LOW relay
 #define ALERT_PIN         PB10      // Buzzer/LED
 
 // ======== LoRa radio ========
@@ -45,11 +45,11 @@
 #define LORA_SF           10        // must match GS
 #define LORA_CR_DEN       5         // coding rate 4/5
 // keep bandwidth/syncword defaults to match GS defaults
-#define LORA_TX_POWER     20        // 2..20 (RA-02 PA_BOOST)
+#define LORA_TX_POWER     10        // 2..20 (RA-02 PA_BOOST)
 
 // ======== Timing ========
 #define TELEMETRY_MS      100UL     // ~10 Hz CSV
-#define SENSOR_MS         1000UL    // DHT refresh
+#define SENSOR_MS         2000UL    // DHT refresh
 #define COUNTDOWN_MS      30000UL
 #define IGNITION_PULSE_MS 300UL
 #define FEEDBACK_PULSE_MS 50UL
@@ -63,7 +63,7 @@
 enum State : uint8_t {
   DISARMED = 0,
   ARMED    = 1,
-  COUNTDOWN= 2,
+  COUNTDOWN = 2,
   IGNITION = 3
 };
 
