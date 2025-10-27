@@ -7,6 +7,7 @@ void calibrate_scale() {
   Serial.println("Calibration Done!");
   Serial.print("Tare Value: ");
   Serial.println(avg_tare);
+  calibrated = 1;
 }
 
 void check_weight() {
@@ -15,6 +16,6 @@ void check_weight() {
     weight = (float)(tare - avg_tare) / weight_scale;
     Serial.print(tare);
     Serial.print(" ");
-     Serial.println(weight, 2);
+    Serial.println(weight, 2);
   }
 }

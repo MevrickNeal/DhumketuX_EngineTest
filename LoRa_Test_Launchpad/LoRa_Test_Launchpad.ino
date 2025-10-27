@@ -23,28 +23,7 @@ void setup() {
 
 void loop() {
   // Check for incoming packets
-  int packetSize = LoRa.parsePacket();
-  if (packetSize) {
-    String incoming = "";
-    while (LoRa.available()) {
-      incoming += (char)LoRa.read();
-    }
-    incoming.trim();
-
-    Serial.print("Received: ");
-    Serial.println(incoming);
-
-    if (incoming == "CHECK") {
-      sendStatus();
-    } 
-    else if (incoming == "ARM") {
-      Serial.println("Command: ARM received — Ready state");
-      // Future action: arm logic
-    } 
-    else if (incoming == "LAUNCH") {
-      Serial.println("Command: LAUNCH received — Starting launch sequence");
-    }
-  }
+  
 }
 
 void sendStatus() {
