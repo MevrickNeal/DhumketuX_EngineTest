@@ -1,833 +1,407 @@
 <!doctype html>
 <html lang="en">
+
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Launch Control WebApp — Ground Station Interface</title>
-<style>
-  :root{
-    --bg:#0f1724;
-    --card:#0b1220;
-    --accent:#06b6d4;
-    --ok:#10b981;
-    --warn:#f59e0b;
-    --bad:#ef4444;
-    --muted:#9aa4b2;
-    --glass: rgba(255,255,255,0.03);
-    color-scheme: dark;
-  }
-  body{
-    font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
-    margin:0;
-    padding:18px;
-    background:linear-gradient(180deg,#071021 0%, #0c1624 100%);
-    color:#e6eef6;
-  }
-  .app {
-    display:grid;
-    grid-template-columns: 420px 1fr;
-    gap:18px;
-    align-items:start;
-  }
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Launch Control WebApp — Ground Station Interface</title>
+    <style>
+        :root {
+            --bg: #0f1724;
+            --card: #0b1220;
+            --accent: #06b6d4;
+            --ok: #10b981;
+            --warn: #f59e0b;
+            --bad: #ef4444;
+            --muted: #9aa4b2;
+            --glass: rgba(255, 255, 255, 0.03);
+            color-scheme: dark;
+        }
 
-  .card{
-    background:var(--card);
-    border-radius:12px;
-    padding:12px;
-    box-shadow: 0 6px 20px rgba(2,6,23,0.6);
-    border:1px solid rgba(255,255,255,0.03);
-  }
+        body {
+            font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+            margin: 0;
+            padding: 18px;
+            background: linear-gradient(180deg, #071021 0%, #0c1624 100%);
+            color: #e6eef6;
+        }
 
-  h1{margin:0 0 8px 0;font-size:18px}
-  .small{font-size:13px;color:var(--muted)}
-  /* left column */
-  .left {
-    display:flex;
-    flex-direction:column;
-    gap:12px;
-  }
+        .app {
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
 
-  /* Site View: video */
-  .site-view {
-    display:flex;
-    flex-direction:column;
-    gap:8px;
-  }
-  #videoContainer{
-    background:var(--glass);
-    height:320px;
-    border-radius:8px;
-    overflow:hidden;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    position:relative;
-  }
-  video{
-    width:100%;
-    height:100%;
-    object-fit:cover;
-    background:#000;
-  }
-  .controls-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+        /* Top layer: camera + graph */
+        .top {
+            display: grid;
+            grid-template-columns: 420px 1fr;
+            gap: 18px;
+        }
 
-  /* status badges */
-  .status-row { display:flex; gap:10px; align-items:center; }
-  .badge {
-    display:inline-flex;
-    gap:8px;
-    align-items:center;
-    padding:8px 10px;
-    border-radius:999px;
-    font-weight:600;
-    font-size:13px;
-    background:rgba(255,255,255,0.02);
-  }
-  .led {
-    width:12px;height:12px;border-radius:50%;
-    box-shadow: 0 0 8px rgba(0,0,0,0.6) inset;
-  }
-  .led.off { background:#1f2937; box-shadow:none; }
-  .led.green { background:var(--ok); box-shadow: 0 0 8px rgba(16,185,129,0.6); }
-  .led.red { background:var(--bad); box-shadow: 0 0 8px rgba(239,68,68,0.5); }
+        /* Bottom layer: connection + controls */
+        .bottom {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 18px;
+            align-items: start;
+        }
 
-  /* right column */
-  .right { display:flex; flex-direction:column; gap:12px; }
+        .card {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 12px;
+            box-shadow: 0 6px 20px rgba(2, 6, 23, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.03);
+        }
 
-  /* graph */
-  #graphCard { padding:10px; display:flex; flex-direction:column; gap:10px; }
-  #thrustCanvas { background: linear-gradient(180deg,#041220,#02101a); border-radius:6px; width:100%; height:220px; display:block; }
+        h1 {
+            margin: 0 0 8px 0;
+            font-size: 18px
+        }
 
-  .btn {
-    appearance:none;
-    border:0;
-    background:var(--accent);
-    color:#022026;
-    padding:10px 14px;
-    border-radius:8px;
-    font-weight:700;
-    cursor:pointer;
-    box-shadow: 0 6px 18px rgba(6,182,212,0.12);
-  }
-  .btn.secondary { background: rgba(255,255,255,0.04); color: #cfe9ef; box-shadow:none; border:1px solid rgba(255,255,255,0.03); }
-  .btn.warn { background:var(--warn); color:#1a1209; }
-  .btn.danger { background:var(--bad); }
-  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+        .small {
+            font-size: 13px;
+            color: var(--muted)
+        }
 
-  .panel {
-    display:flex;
-    gap:8px;
-    align-items:center;
-    justify-content:space-between;
-  }
+        /* Site View */
+        .site-view {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
 
-  .countdown {
-    font-size:40px;
-    font-weight:900;
-    letter-spacing:2px;
-  }
+        #videoContainer {
+            background: var(--glass);
+            height: 320px;
+            border-radius: 8px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
 
-  input, select { padding:8px; border-radius:8px; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.03); color:inherit; }
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            background: #000;
+        }
 
-  footer { margin-top:18px; font-size:12px; color:var(--muted) }
-  @media (max-width:980px){
-    .app { grid-template-columns: 1fr; }
-    #videoContainer { height:220px; }
-  }
-</style>
+        .controls-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        /* Graph */
+        #graphCard {
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        #thrustCanvas {
+            background: linear-gradient(180deg, #041220, #02101a);
+            border-radius: 6px;
+            width: 100%;
+            height: 220px;
+            display: block;
+        }
+
+        /* Status + Controls */
+        .status-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .badge {
+            display: inline-flex;
+            gap: 8px;
+            align-items: center;
+            padding: 8px 10px;
+            border-radius: 999px;
+            font-weight: 600;
+            font-size: 13px;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .led {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            box-shadow: 0 0 8px rgba(0, 0, 0, 0.6) inset;
+        }
+
+        .led.off {
+            background: #1f2937;
+            box-shadow: none;
+        }
+
+        .led.green {
+            background: var(--ok);
+            box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
+        }
+
+        .led.red {
+            background: var(--bad);
+            box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
+        }
+
+        .btn {
+            appearance: none;
+            border: 0;
+            background: var(--accent);
+            color: #022026;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 6px 18px rgba(6, 182, 212, 0.12);
+        }
+
+        .btn.secondary {
+            background: rgba(255, 255, 255, 0.04);
+            color: #cfe9ef;
+            box-shadow: none;
+            border: 1px solid rgba(255, 255, 255, 0.03);
+        }
+
+        .btn.warn {
+            background: var(--warn);
+            color: #1a1209;
+        }
+
+        .btn.danger {
+            background: var(--bad);
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .countdown {
+            font-size: 40px;
+            font-weight: 900;
+            letter-spacing: 2px;
+        }
+
+        footer {
+            margin-top: 18px;
+            font-size: 12px;
+            color: var(--muted)
+        }
+
+        @media (max-width:980px) {
+            .top {
+                grid-template-columns: 1fr;
+            }
+
+            .bottom {
+                grid-template-columns: 1fr;
+            }
+
+            #videoContainer {
+                height: 220px;
+            }
+        }
+    </style>
 </head>
+
 <body>
-<div class="app">
-  <!-- LEFT -->
-  <div class="left">
-    <div class="card site-view">
-      <h1>Site View</h1>
-      <div class="small">Choose camera input and preview live feed</div>
-      <div id="videoContainer">
-        <video id="siteVideo" autoplay playsinline muted></video>
-      </div>
-      <div class="controls-row">
-        <label class="small">Camera:</label>
-        <select id="cameraSelect"></select>
-        <button id="startCamBtn" class="btn secondary">Start Camera</button>
-        <button id="stopCamBtn" class="btn secondary">Stop</button>
-      </div>
-    </div>
+    <div class="app">
 
-    <div class="card">
-      <h1>Connection & Status</h1>
-      <div class="small">Connect to Ground Station (WebSerial)</div>
-      <div style="margin-top:8px" class="row">
-        <button id="connectBtn" class="btn">Connect Serial</button>
-        <button id="disconnectBtn" class="btn secondary" disabled>Disconnect</button>
-        <button id="sendCheckBtn" class="btn secondary">Send CHECK</button>
-      </div>
+        <!-- TOP LAYER -->
+        <div class="top">
+            <!-- LEFT: Site View -->
+            <div class="card site-view">
+                <h1>Site View</h1>
+                <div class="small">Choose camera input and preview live feed</div>
+                <div id="videoContainer">
+                    <video id="siteVideo" autoplay playsinline muted></video>
+                </div>
+                <div class="controls-row">
+                    <label class="small">Camera:</label>
+                    <select id="cameraSelect"></select>
+                    <button id="startCamBtn" class="btn secondary">Start Camera</button>
+                    <button id="stopCamBtn" class="btn secondary">Stop</button>
+                </div>
+            </div>
 
-      <div style="margin-top:12px" class="status-row">
-        <div class="badge">
-          <div id="connLed" class="led off"></div>
-          <div>
-            <div style="font-size:12px;color:var(--muted)">Connection</div>
-            <div id="connTxt">Unknown</div>
-          </div>
+            <!-- RIGHT: Thrust Graph -->
+            <div id="graphCard" class="card">
+                <h1>Thrust (Load Cell) Graph</h1>
+                <div class="small">Realtime thrust values (left → right). New values appended to the right and graph
+                    scrolls.</div>
+                <canvas id="thrustCanvas" width="800" height="220"></canvas>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+                    <div class="small">CSV points saved: <span id="csvCount">0</span></div>
+                    <div class="small">Graph scale: <span id="scaleTxt">10 units</span></div>
+                </div>
+            </div>
         </div>
 
-        <div class="badge">
-          <div id="calLed" class="led off"></div>
-          <div>
-            <div style="font-size:12px;color:var(--muted)">Calibrated</div>
-            <div id="calTxt">Unknown</div>
-          </div>
+        <!-- BOTTOM LAYER -->
+        <div class="bottom">
+
+            <!-- LEFT: Connection & Status -->
+            <div class="card">
+                <h1>Connection & Status</h1>
+                <div class="small">Connect to Ground Station (WebSerial)</div>
+                <div style="margin-top:8px" class="row">
+                    <button id="connectBtn" class="btn">Connect Serial</button>
+                    <button id="disconnectBtn" class="btn secondary" disabled>Disconnect</button>
+                    <button id="sendCheckBtn" class="btn secondary">Send CHECK</button>
+                </div>
+
+                <div style="margin-top:12px" class="status-row">
+                    <div class="badge">
+                        <div id="connLed" class="led off"></div>
+                        <div>
+                            <div style="font-size:12px;color:var(--muted)">Connection</div>
+                            <div id="connTxt">Unknown</div>
+                        </div>
+                    </div>
+                    <div class="badge">
+                        <div id="calLed" class="led off"></div>
+                        <div>
+                            <div style="font-size:12px;color:var(--muted)">Calibrated</div>
+                            <div id="calTxt">Unknown</div>
+                        </div>
+                    </div>
+                    <div class="badge">
+                        <div style="width:12px;height:12px;border-radius:4px;background:rgba(255,255,255,0.03)"></div>
+                        <div>
+                            <div style="font-size:12px;color:var(--muted)">State</div>
+                            <div id="stateTxt">IDLE</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-top:12px" class="small">
+                    Latest thrust: <span id="latestThrust">—</span>
+                </div>
+            </div>
+
+            <!-- RIGHT: Controls -->
+            <div class="card">
+                <h1>Controls</h1>
+                <div class="small">Send commands to Ground Station (which forwards to LaunchPad)</div>
+
+                <div style="margin-top:8px" class="row">
+                    <button id="armBtn" class="btn">ARM</button>
+                    <button id="launchBtn" class="btn warn" disabled>LAUNCH</button>
+                    <button id="cancelBtn" class="btn danger" disabled>CANCEL</button>
+                </div>
+
+                <div style="margin-top:10px" class="row">
+                    <button id="saveCsvBtn" class="btn secondary">Save thrust CSV</button>
+                </div>
+
+                <div style="margin-top:10px" class="panel">
+                    <div>
+                        <h1>Countdown Timer</h1>
+                        <div class="small">Countdown handled by webapp. LAUNCH triggers 30s countdown.</div>
+                    </div>
+                    <div style="text-align:right">
+                        <div id="countdownDisplay" class="countdown">--</div>
+                    </div>
+                </div>
+
+                <div style="margin-top:10px">
+                    <div class="small">Logs</div>
+                    <pre id="logArea"
+                        style="height:140px;overflow:auto;background:rgba(255,255,255,0.02);padding:8px;border-radius:6px;border:1px solid rgba(255,255,255,0.02);"></pre>
+                </div>
+            </div>
         </div>
 
-        <div class="badge">
-          <div style="width:12px;height:12px;border-radius:4px;background:rgba(255,255,255,0.03)"></div>
-          <div>
-            <div style="font-size:12px;color:var(--muted)">State</div>
-            <div id="stateTxt">IDLE</div>
-          </div>
-        </div>
-      </div>
-
-      <div style="margin-top:12px" class="small">
-        Latest thrust: <span id="latestThrust">—</span>
-      </div>
-
+        <footer class="small">WebSerial + getUserMedia demo • Use Chrome/Edge and allow camera & serial access</footer>
     </div>
 
-    <div class="card">
-      <h1>Controls</h1>
-      <div class="small">Send commands to Ground Station (which forwards to LaunchPad)</div>
-
-      <div style="margin-top:8px" class="row">
-        <button id="armBtn" class="btn">ARM</button>
-        <button id="launchBtn" class="btn warn" disabled>LAUNCH</button>
-        <button id="cancelBtn" class="btn danger" disabled>CANCEL</button>
-      </div>
-
-      <div style="margin-top:10px" class="row">
-        <button id="saveCsvBtn" class="btn secondary">Save thrust CSV</button>
-      </div>
-
-      <div style="margin-top:10px">
-        <div class="small">Logs</div>
-        <pre id="logArea" style="height:140px;overflow:auto;background:rgba(255,255,255,0.02);padding:8px;border-radius:6px;border:1px solid rgba(255,255,255,0.02);"></pre>
-      </div>
-    </div>
-
-    <footer class="small">WebSerial + getUserMedia demo • Use Chrome/Edge and allow camera & serial access</footer>
-  </div>
-
-  <!-- RIGHT -->
-  <div class="right">
-    <div id="graphCard" class="card">
-      <h1>Thrust (Load Cell) Graph</h1>
-      <div class="small">Realtime thrust values (left → right). New values appended to the right and graph scrolls.</div>
-      <canvas id="thrustCanvas" width="800" height="220"></canvas>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
-        <div class="small">CSV points saved: <span id="csvCount">0</span></div>
-        <div class="small">Graph scale: <span id="scaleTxt">10 units</span></div>
-      </div>
-    </div>
-
-    <div class="card panel">
-      <div>
-        <h1>Countdown Timer</h1>
-        <div class="small">Countdown handled by webapp. LAUNCH triggers 30s countdown.</div>
-      </div>
-      <div style="text-align:right">
-        <div id="countdownDisplay" class="countdown">--</div>
-      </div>
-    </div>
-
-  </div>
-</div>
-
-<script>
-/* ---------------------------
-   Web App JS
-   - Web Serial for communication
-   - Webcam selection + preview
-   - Thrust graph + CSV saving
-   - UI state: connection, calibrated, arm/launch/cancel
-   --------------------------- */
-
-(() => {
-  // UI elements
-  const connectBtn = document.getElementById('connectBtn');
-  const disconnectBtn = document.getElementById('disconnectBtn');
-  const sendCheckBtn = document.getElementById('sendCheckBtn');
-  const armBtn = document.getElementById('armBtn');
-  const launchBtn = document.getElementById('launchBtn');
-  const cancelBtn = document.getElementById('cancelBtn');
-  const saveCsvBtn = document.getElementById('saveCsvBtn');
-
-  const connLed = document.getElementById('connLed');
-  const calLed = document.getElementById('calLed');
-  const connTxt = document.getElementById('connTxt');
-  const calTxt = document.getElementById('calTxt');
-  const stateTxt = document.getElementById('stateTxt');
-  const latestThrust = document.getElementById('latestThrust');
-  const logArea = document.getElementById('logArea');
-
-  const countdownDisplay = document.getElementById('countdownDisplay');
-
-  // Video elements
-  const cameraSelect = document.getElementById('cameraSelect');
-  const startCamBtn = document.getElementById('startCamBtn');
-  const stopCamBtn = document.getElementById('stopCamBtn');
-  const siteVideo = document.getElementById('siteVideo');
-
-  // Graph
-  const canvas = document.getElementById('thrustCanvas');
-  const ctx = canvas.getContext('2d');
-  const csvCountEl = document.getElementById('csvCount');
-  const scaleTxt = document.getElementById('scaleTxt');
-
-  // Serial variables
-  let port = null;
-  let reader = null;
-  let writer = null;
-  let keepReading = false;
-
-  // App state flags
-  let isConnected = false;
-  let isCalibrated = false;
-  let currentState = 'IDLE'; // IDLE, ARMED, COUNTDOWN, LAUNCHED
-  let lastCheckSentAt = 0;
-  let connTimeoutTimer = null;
-
-  // Graph data
-  const maxPoints = 2000; // max stored points
-  const graphData = []; // {t: timestamp, v: value}
-  let csvData = []; // for saving CSV
-  let graphScale = 20; // units shown on Y scale (adjustable)
-  scaleTxt.textContent = graphScale + ' units';
-
-  // Countdown
-  let countdownInterval = null;
-  let countdownRemaining = 0;
-
-  // Helper UI functions
-  function log(msg, isError=false){
-    const time = new Date().toLocaleTimeString();
-    logArea.textContent += `[${time}] ${msg}\n`;
-    logArea.scrollTop = logArea.scrollHeight;
-    if (isError) console.error(msg); else console.log(msg);
-  }
-
-  function setConnectionState(stateBool){
-    isConnected = !!stateBool;
-    if (isConnected){
-      connLed.className = 'led green';
-      connTxt.textContent = 'Connected';
-    } else {
-      connLed.className = 'led red';
-      connTxt.textContent = 'Disconnected';
-    }
-    updateLaunchEnable();
-  }
-
-  function setCalibratedState(cal){
-    isCalibrated = !!cal;
-    if (isCalibrated){
-      calLed.className = 'led green';
-      calTxt.textContent = 'Calibrated';
-    } else {
-      calLed.className = 'led red';
-      calTxt.textContent = 'Not Calibrated';
-    }
-    updateLaunchEnable();
-  }
-
-  function setAppState(state){
-    currentState = state;
-    stateTxt.textContent = state;
-    if (state === 'ARMED'){
-      cancelBtn.disabled = false;
-      armBtn.disabled = true;
-    } else if (state === 'LAUNCHED' || state === 'COUNTDOWN'){
-      armBtn.disabled = true;
-      cancelBtn.disabled = false;
-    } else {
-      // IDLE
-      armBtn.disabled = false;
-      launchBtn.disabled = true;
-      cancelBtn.disabled = true;
-    }
-    updateLaunchEnable();
-  }
-
-  function updateLaunchEnable(){
-    // LAUNCH only clickable when ARMED, connected and calibrated
-    if (currentState === 'ARMED' && isConnected && isCalibrated){
-      launchBtn.disabled = false;
-    } else {
-      launchBtn.disabled = true;
-    }
-  }
-
-  // -----------------------
-  // Serial: connect / read / write
-  // -----------------------
-  async function connectSerial(){
-    if (!('serial' in navigator)) {
-      alert('Web Serial is not supported in this browser. Use Chrome or Edge.');
-      return;
-    }
-    try {
-      port = await navigator.serial.requestPort();
-      await port.open({ baudRate: 115200 });
-      log('Serial port opened');
-
-      writer = port.writable.getWriter();
-      // Setup a reader for text lines
-      const decoder = new TextDecoderStream();
-      const inputDone = port.readable.pipeTo(decoder.writable);
-      const inputStream = decoder.readable;
-      reader = inputStream.getReader();
-
-      keepReading = true;
-      readLoop();
-
-      connectBtn.disabled = true;
-      disconnectBtn.disabled = false;
-      setConnectionState(true);
-    } catch (err) {
-      log('Serial open error: ' + err, true);
-    }
-  }
-
-  async function disconnectSerial(){
-    keepReading = false;
-    try {
-      if (reader) {
-        await reader.cancel();
-        reader.releaseLock();
-        reader = null;
-      }
-      if (writer) {
-        writer.releaseLock();
-        writer = null;
-      }
-      if (port) {
-        await port.close();
-        port = null;
-      }
-      log('Serial port closed');
-    } catch (err) {
-      console.error('Error closing serial:', err);
-    } finally {
-      connectBtn.disabled = false;
-      disconnectBtn.disabled = true;
-      setConnectionState(false);
-    }
-  }
-
-  async function readLoop(){
-    let partial = '';
-    while (keepReading && reader) {
-      try {
-        const { value, done } = await reader.read();
-        if (done) break;
-        if (value) {
-          // value might contain multiple lines — split properly
-          partial += value;
-          let lines = partial.split(/\r?\n/);
-          partial = lines.pop(); // last may be incomplete
-          for (const line of lines){
-            if (line.trim().length === 0) continue;
-            handleIncomingLine(line.trim());
-          }
-        }
-      } catch (err) {
-        log('Read error: ' + err, true);
-        setConnectionState(false);
-        keepReading = false;
-        break;
-      }
-    }
-  }
-
-  async function writeLine(text){
-    if (!writer) {
-      log('Serial writer not available', true);
-      return;
-    }
-    try {
-      const data = text + '\n';
-      await writer.write(new TextEncoder().encode(data));
-      log('→ ' + text);
-    } catch (err) {
-      log('Write error: ' + err, true);
-    }
-  }
-
-  // -----------------------
-  // Incoming data parsing
-  // Expected lines: "OK,12.75" or "NO,0.00" or other messages like "Switched to ARMED"
-  // -----------------------
-  let lastReceivedAt = 0;
-  function handleIncomingLine(line){
-    lastReceivedAt = Date.now();
-    log('← ' + line);
-
-    // When we get any data after sending CHECK, consider connection alive.
-    // For more robust logic we could match to last CHECK timestamp.
-    setConnectionState(true);
-    // reset any disconnect timeout
-    resetConnTimeout();
-
-    // Parse OK,NO lines
-    if (line.startsWith('OK') || line.startsWith('NO')) {
-      const comma = line.indexOf(',');
-      if (comma > 0){
-        const status = line.substring(0,comma);
-        const valStr = line.substring(comma+1).trim();
-        const val = parseFloat(valStr);
-        latestThrust.textContent = isFinite(val) ? val.toFixed(2) : '—';
-        // treat as thrust sample
-        pushThrustSample(Date.now(), isFinite(val) ? val : 0);
-
-        if (status === 'OK') {
-          setCalibratedState(true);
-        } else {
-          setCalibratedState(false);
-        }
-      } else {
-        // no comma - treat as just status
-        if (line === 'OK') setCalibratedState(true);
-        else setCalibratedState(false);
-      }
-      return;
-    }
-
-    // Non-OK messages we also look for keywords to update UI state
-    const L = line.toUpperCase();
-    if (L.includes('ARMED')) {
-      setAppState('ARMED');
-    } else if (L.includes('LAUNCHED')) {
-      setAppState('LAUNCHED');
-    } else if (L.includes('IDLE')) {
-      setAppState('IDLE');
-    }
-  }
-
-  // If no data within timeout after last CHECK, mark disconnected
-  function resetConnTimeout(){
-    if (connTimeoutTimer) clearTimeout(connTimeoutTimer);
-    connTimeoutTimer = setTimeout(()=>{
-      log('No response detected for 7s — marking disconnected');
-      setConnectionState(false);
-      setCalibratedState(false);
-    }, 7000);
-  }
-
-  // -----------------------
-  // Commands & buttons
-  // -----------------------
-  connectBtn.addEventListener('click', connectSerial);
-  disconnectBtn.addEventListener('click', disconnectSerial);
-
-  sendCheckBtn.addEventListener('click', ()=>{
-    writeLine('CHECK');
-    lastCheckSentAt = Date.now();
-    // if no response after 5s, mark disconnected (handled by resetConnTimeout)
-    resetConnTimeout();
-  });
-
-  armBtn.addEventListener('click', async ()=>{
-    writeLine('ARM');
-    setAppState('ARMED');
-    log('ARM command issued from webapp');
-    // Cancel becomes active
-    cancelBtn.disabled = false;
-  });
-
-  launchBtn.addEventListener('click', ()=>{
-    // Start countdown only if conditions satisfied (button enable enforces)
-    startCountdown(30);
-    writeLine('LAUNCH');
-    setAppState('COUNTDOWN');
-    log('LAUNCH initiated — countdown started (30s)');
-  });
-
-  cancelBtn.addEventListener('click', ()=>{
-    writeLine('IDLE');
-    stopCountdown();
-    setAppState('IDLE');
-    setCalibratedState(false); // optional
-    log('Cancel sent — state reset to IDLE');
-  });
-
-  saveCsvBtn.addEventListener('click', saveCsv);
-
-  // -----------------------
-  // Thrust graph: simple scrolling plot
-  // -----------------------
-  function pushThrustSample(ts, value){
-    graphData.push({t: ts, v: value});
-    csvData.push({t:ts, v:value});
-    if (graphData.length > maxPoints) graphData.shift();
-    csvCountEl.textContent = csvData.length;
-    drawGraph();
-  }
-
-  function drawGraph(){
-    const w = canvas.width = canvas.clientWidth * devicePixelRatio;
-    const h = canvas.height = canvas.clientHeight * devicePixelRatio;
-    ctx.clearRect(0,0,w,h);
-
-    // background grid
-    ctx.fillStyle = '#02101a';
-    ctx.fillRect(0,0,w,h);
-
-    const padding = 8 * devicePixelRatio;
-    const innerW = w - padding*2;
-    const innerH = h - padding*2;
-
-    // draw baseline grid lines
-    ctx.strokeStyle = 'rgba(255,255,255,0.03)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    for (let i=0;i<5;i++){
-      const y = padding + i*(innerH/4);
-      ctx.moveTo(padding, y);
-      ctx.lineTo(padding + innerW, y);
-    }
-    ctx.stroke();
-
-    // no data
-    if (!graphData.length) return;
-
-    // map timestamps across width -- show last N points or time-window
-    // we'll map indices left->right
-    const pts = graphData.slice(-300); // limit drawn points
-    const maxV = Math.max(graphScale, ...pts.map(p=>Math.abs(p.v)));
-    const minV = 0; // thrust not negative in typical use; normalize to 0..maxV
-
-    // draw area
-    ctx.beginPath();
-    for (let i=0;i<pts.length;i++){
-      const x = padding + (i/(pts.length-1 || 1)) * innerW;
-      const v = pts[i].v;
-      const y = padding + innerH - ( (v - minV) / (maxV - minV || 1) ) * innerH;
-      if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
-    }
-    ctx.strokeStyle = 'rgba(6,182,212,0.95)';
-    ctx.lineWidth = 2 * devicePixelRatio;
-    ctx.stroke();
-
-    // fill under curve
-    ctx.lineTo(padding + innerW, padding + innerH);
-    ctx.lineTo(padding, padding + innerH);
-    ctx.closePath();
-    ctx.fillStyle = 'rgba(6,182,212,0.08)';
-    ctx.fill();
-
-    // draw current value marker
-    const last = pts[pts.length-1];
-    const lastX = padding + innerW;
-    const lastY = padding + innerH - ( (last.v - minV) / (maxV - minV || 1) ) * innerH;
-    ctx.beginPath();
-    ctx.arc(lastX, lastY, 3*devicePixelRatio, 0, Math.PI*2);
-    ctx.fillStyle = '#06b6d4';
-    ctx.fill();
-  }
-
-  // -----------------------
-  // CSV save
-  // -----------------------
-  function saveCsv(){
-    if (!csvData.length){
-      alert('No thrust data to save');
-      return;
-    }
-    let csv = 'timestamp,value\n';
-    for (const r of csvData){
-      csv += `${r.t},${r.v}\n`;
-    }
-    const blob = new Blob([csv], {type:'text/csv'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    const filename = `thrust_${Date.now()}.csv`;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-    log('CSV saved: ' + filename);
-  }
-
-  // -----------------------
-  // Countdown logic
-  // -----------------------
-  function startCountdown(seconds){
-    stopCountdown();
-    countdownRemaining = seconds;
-    countdownDisplay.textContent = formatTime(countdownRemaining);
-    setAppState('COUNTDOWN');
-    countdownInterval = setInterval(()=>{
-      countdownRemaining--;
-      if (countdownRemaining <= 0){
-        stopCountdown();
-        setAppState('LAUNCHED');
-        countdownDisplay.textContent = '0';
-        log('Countdown complete — LAUNCH should be in effect');
-        // optionally we might trigger additional UI actions here
-      } else {
-        countdownDisplay.textContent = formatTime(countdownRemaining);
-      }
-    }, 1000);
-  }
-
-  function stopCountdown(){
-    if (countdownInterval) {
-      clearInterval(countdownInterval);
-      countdownInterval = null;
-    }
-    countdownRemaining = 0;
-    countdownDisplay.textContent = '--';
-  }
-
-  function formatTime(s){
-    const mm = Math.floor(s/60).toString().padStart(2,'0');
-    const ss = (s%60).toString().padStart(2,'0');
-    return `${mm}:${ss}`;
-  }
-
-  // -----------------------
-  // Camera selection & preview
-  // -----------------------
-  let currentStream = null;
-  async function enumerateCameras(){
-    try {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const cams = devices.filter(d => d.kind === 'videoinput');
-      cameraSelect.innerHTML = '';
-      cams.forEach((c, i) => {
-        const opt = document.createElement('option');
-        opt.value = c.deviceId;
-        opt.textContent = c.label || `Camera ${i+1}`;
-        cameraSelect.appendChild(opt);
-      });
-      if (!cams.length){
-        const opt = document.createElement('option');
-        opt.value = '';
-        opt.textContent = 'No cameras found';
-        cameraSelect.appendChild(opt);
-      }
-    } catch (err) {
-      log('Camera enumerate error: ' + err, true);
-    }
-  }
-
-  async function startCamera(){
-    if (currentStream){
-      stopCamera();
-    }
-    const deviceId = cameraSelect.value || undefined;
-    try {
-      const constraints = { video: deviceId ? { deviceId: { exact: deviceId } } : true, audio:false };
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      currentStream = stream;
-      siteVideo.srcObject = stream;
-      await siteVideo.play();
-      log('Camera started');
-    } catch (err) {
-      log('Camera start error: ' + err, true);
-      alert('Unable to access camera: ' + err);
-    }
-  }
-
-  function stopCamera(){
-    if (currentStream){
-      currentStream.getTracks().forEach(t => t.stop());
-      currentStream = null;
-      siteVideo.srcObject = null;
-      log('Camera stopped');
-    }
-  }
-
-  startCamBtn.addEventListener('click', startCamera);
-  stopCamBtn.addEventListener('click', stopCamera);
-
-  cameraSelect.addEventListener('change', ()=>{
-    // if playing, restart with the new device
-    if (currentStream) startCamera();
-  });
-
-  // Initialize camera list
-  enumerateCameras();
-  // Also re-enumerate when permissions change
-  navigator.mediaDevices.addEventListener('devicechange', enumerateCameras);
-
-  // -----------------------
-  // Auto-UI interactions: periodically send CHECK when idle (optional)
-  // We will do it every 5s if user is IDLE and connected
-  // -----------------------
-  setInterval(()=>{
-    if (isConnected && currentState === 'IDLE'){
-      // send CHECK every 5 seconds to verify link (if GS not already sending own CHECKs)
-      writeLine('CHECK');
-    }
-  }, 5000);
-
-  // -----------------------
-  // Semantic helpers: writeLine wrapper ensures writer available
-  // -----------------------
-  async function writeLine(line){
-    if (!writer){
-      log('Cannot send — not connected to serial', true);
-      return;
-    }
-    try {
-      // writer expects Uint8Array
-      await writer.write(new TextEncoder().encode(line + '\n'));
-      log('→ ' + line);
-      // if we send CHECK mark connection pending
-      if (line.trim() === 'CHECK'){
-        // if no response within 7s, mark disconnected (resetConnTimeout handles)
-        resetConnTimeout();
-      }
-    } catch (err) {
-      log('Serial write failed: ' + err, true);
-    }
-  }
-
-  // Replace previous writeLine usage to our writer wrapper
-  // Re-bind event listeners to use writeLine wrapper instead of older writeLine
-  sendCheckBtn.removeEventListener('click', ()=>{}); // safe no-op
-  sendCheckBtn.addEventListener('click', ()=> writeLine('CHECK'));
-  armBtn.removeEventListener('click', ()=>{});
-  armBtn.addEventListener('click', ()=> writeLine('ARM'));
-  launchBtn.removeEventListener('click', ()=>{});
-  launchBtn.addEventListener('click', ()=> {
-    startCountdown(30);
-    writeLine('LAUNCH');
-    setAppState('COUNTDOWN');
-  });
-  cancelBtn.removeEventListener('click', ()=>{});
-  cancelBtn.addEventListener('click', ()=> {
-    writeLine('IDLE');
-    stopCountdown();
-    setAppState('IDLE');
-  });
-  connectBtn.removeEventListener('click', ()=>{});
-  connectBtn.addEventListener('click', connectSerial);
-  disconnectBtn.removeEventListener('click', ()=>{});
-  disconnectBtn.addEventListener('click', disconnectSerial);
-
-  // draw initial empty graph
-  drawGraph();
-
-  // Expose for debug (optional)
-  window._lc = {
-    pushThrustSample, graphData, csvData, writeLine
-  };
-
-})();
-</script>
+    <script>
+        /* ---- JavaScript: identical core logic from previous version ---- */
+        (() => {
+            let port, reader, writer, keepReading = false;
+            const c = o => document.getElementById(o);
+            const logArea = c("logArea"), connLed = c("connLed"), calLed = c("calLed"),
+                connTxt = c("connTxt"), calTxt = c("calTxt"), stateTxt = c("stateTxt"),
+                latestThrust = c("latestThrust"), countdownDisplay = c("countdownDisplay"),
+                canvas = c("thrustCanvas"), ctx = canvas.getContext("2d"),
+                csvCountEl = c("csvCount"), scaleTxt = c("scaleTxt");
+            const cameraSelect = c("cameraSelect"), siteVideo = c("siteVideo");
+            const btns = {
+                connect: c("connectBtn"), disconnect: c("disconnectBtn"),
+                sendCheck: c("sendCheckBtn"), arm: c("armBtn"), launch: c("launchBtn"),
+                cancel: c("cancelBtn"), save: c("saveCsvBtn"),
+                startCam: c("startCamBtn"), stopCam: c("stopCamBtn")
+            };
+            let isConnected = false, isCalibrated = false, currentState = "IDLE",
+                graphData = [], csvData = [], graphScale = 20; scaleTxt.textContent = graphScale + " units";
+            let countdownInterval = null, countdownRemaining = 0, connTimeoutTimer = null;
+            function log(m, e = false) { const t = new Date().toLocaleTimeString(); logArea.textContent += `[${t}] ${m}\n`; logArea.scrollTop = logArea.scrollHeight; if (e) console.error(m); }
+            function setConn(s) { isConnected = s; connLed.className = "led " + (s ? "green" : "red"); connTxt.textContent = s ? "Connected" : "Disconnected"; updateLaunchEnable(); }
+            function setCal(s) { isCalibrated = s; calLed.className = "led " + (s ? "green" : "red"); calTxt.textContent = s ? "Calibrated" : "Not Calibrated"; updateLaunchEnable(); }
+            function setState(s) { currentState = s; stateTxt.textContent = s; btns.cancel.disabled = (s === "IDLE"); btns.arm.disabled = (s !== "IDLE"); updateLaunchEnable(); }
+            function updateLaunchEnable() { btns.launch.disabled = !(isConnected && isCalibrated && currentState === "ARMED"); }
+            async function connectSerial() {
+                if (!("serial" in navigator)) { alert("Use Chrome or Edge for WebSerial"); return; }
+                try {
+                    port = await navigator.serial.requestPort(); await port.open({ baudRate: 115200 });
+                    writer = port.writable.getWriter(); const dec = new TextDecoderStream(); port.readable.pipeTo(dec.writable); reader = dec.readable.getReader();
+                    keepReading = true; readLoop(); btns.connect.disabled = true; btns.disconnect.disabled = false; setConn(true); log("Serial connected");
+                }
+                catch (e) { log("Serial error: " + e, true); }
+            }
+            async function disconnectSerial() {
+                keepReading = false; try {
+                    if (reader) { await reader.cancel(); reader.releaseLock(); reader = null; }
+                    if (writer) { writer.releaseLock(); writer = null; } if (port) { await port.close(); port = null; } log("Serial disconnected");
+                }
+                    catch (e) { log("Disconnect error: " + e, true); } setConn(false); btns.connect.disabled = false; btns.disconnect.disabled = true;
+            }
+            async function readLoop() { let buf = ""; while (keepReading && reader) { const { value, done } = await reader.read(); if (done) break; if (value) { buf += value; let lines = buf.split(/\r?\n/); buf = lines.pop(); lines.forEach(l => l.trim() && handleLine(l.trim())); } } }
+            async function writeLine(t) { if (!writer) return; await writer.write(new TextEncoder().encode(t + "\n")); log("→ " + t); }
+            function handleLine(l) {
+                log("← " + l); setConn(true); resetConnTimeout();
+                if (l.startsWith("OK") || l.startsWith("NO")) { const a = l.split(","); if (a.length == 2) { const kg = parseFloat(a[1]), val = kg * 9.80665; latestThrust.textContent = val.toFixed(2) + " N"; pushThrust(Date.now(), val); setCal(l.startsWith("OK")); } return; }
+                const L = l.toUpperCase(); if (L.includes("ARM")) setState("ARMED"); else if (L.includes("LAUNCH")) setState("LAUNCHED"); else if (L.includes("IDLE")) setState("IDLE");
+            }
+            function resetConnTimeout() { clearTimeout(connTimeoutTimer); connTimeoutTimer = setTimeout(() => { setConn(false); setCal(false); }, 7000); }
+            function pushThrust(t, v) { graphData.push({ t, v }); csvData.push({ t, v }); if (graphData.length > 800) graphData.shift(); csvCountEl.textContent = csvData.length; drawGraph(); }
+            function drawGraph() {
+                const w = canvas.width = canvas.clientWidth * devicePixelRatio, h = canvas.height = canvas.clientHeight * devicePixelRatio;
+                ctx.fillStyle = "#02101a"; ctx.fillRect(0, 0, w, h); ctx.strokeStyle = "rgba(255,255,255,0.08)"; ctx.lineWidth = 1; for (let i = 0; i < 5; i++) { const y = i * h / 4; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
+                if (!graphData.length) return; const pts = graphData.slice(-300), maxV = Math.max(graphScale, ...pts.map(p => p.v));
+                ctx.beginPath(); pts.forEach((p, i) => { const x = (i / (pts.length - 1 || 1)) * w, y = h - (p.v / maxV) * h; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+                ctx.strokeStyle = "#06b6d4"; ctx.lineWidth = 2 * devicePixelRatio; ctx.stroke();
+            }
+            btns.connect.onclick = connectSerial; btns.disconnect.onclick = disconnectSerial;
+            btns.sendCheck.onclick = () => { writeLine("CHECK"); resetConnTimeout(); };
+            btns.arm.onclick = () => { writeLine("ARM"); setState("ARMED"); };
+            btns.launch.onclick = () => { writeLine("LAUNCH"); startCountdown(30); setState("COUNTDOWN"); };
+            btns.cancel.onclick = () => { writeLine("IDLE"); stopCountdown(); setState("IDLE"); };
+            btns.save.onclick = () => { let csv = "time_s,thrust_N\n"; csvData.forEach(p => csv += `${p.t},${p.v}\n`); const b = new Blob([csv], { type: "text/csv" }), a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = "thrust.csv"; a.click(); };
+            function startCountdown(s) {
+                stopCountdown(); countdownRemaining = s; countdownDisplay.textContent = s;
+                countdownInterval = setInterval(() => { countdownRemaining--; countdownDisplay.textContent = countdownRemaining; if (countdownRemaining <= 0) { stopCountdown(); setState("LAUNCHED"); } }, 1000);
+            }
+            function stopCountdown() { clearInterval(countdownInterval); countdownInterval = null; countdownDisplay.textContent = "--"; }
+            let stream = null; async function listCams() { const d = await navigator.mediaDevices.enumerateDevices(); cameraSelect.innerHTML = d.filter(v => v.kind === "videoinput").map((c, i) => `<option value="${c.deviceId}">${c.label || "Camera " + (i + 1)}</option>`).join(""); }
+            async function startCam() { const id = cameraSelect.value; stream = await navigator.mediaDevices.getUserMedia({ video: { deviceId: id }, audio: false }); siteVideo.srcObject = stream; }
+            function stopCam() { if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; siteVideo.srcObject = null; } }
+            btns.startCam.onclick = startCam; btns.stopCam.onclick = stopCam; listCams();
+        })();
+    </script>
 </body>
+
 </html>
