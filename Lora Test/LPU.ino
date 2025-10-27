@@ -1,315 +1,284 @@
 /**
- * @file LP_Bluepill.ino
- * @brief DhumketuX Launch Pad Unit (LP – STM32 Bluepill)
- *
- * MCU: STM32F103C8T6 (Bluepill) – Arduino Core for STM32 by ST
- * LoRa: RA-02 (SX1278) @ 433 MHz
- *
- * Wiring (matches your table):
- *  LoRa CS  -> PA4
- *  LoRa RST -> PB12
- *  LoRa DIO0-> PB13
- *  LoRa SCK -> PA5
- *  LoRa MISO-> PA6
- *  LoRa MOSI-> PA7
- *
- *  HX711 DOUT -> PB0
- *  HX711 SCK  -> PB1
- *  DHT22 DATA -> PA8
- *  Ignition Relay -> PC13 (Active-LOW, 300 ms pulse)
- *  Safety Servo   -> PA3  (PWM)
- *  Buzzer/LED     -> PB10 (HIGH = on)
- *
- * Telemetry_t binary packet (packed) → LoRa:
- *   float thrust, float temperature, float humidity, int8_t isArmed, uint16_t checksum
- * Checksum is 16-bit sum over bytes of the struct with checksum field zeroed.
+ * DhumketuX LaunchPad Unit (LPU) — STM32 Bluepill
+ * Paired with your current GS and Web UI (ASCII CSV, 5 fields)
+ * CSV: thrust(N),temp(C),humi(%),uptime_ms,state(0=SAFE,1=ARMED,2=COUNTDOWN,3=IGNITION)
  */
 
 #include <SPI.h>
 #include <LoRa.h>
 #include <Servo.h>
 #include <DHT.h>
+#include <HX711.h>
+#include <math.h>
 
-// ---------------- Pins ----------------
-#define LORA_CS_PIN     PA4
-#define LORA_RST_PIN    PB12
-#define LORA_DIO0_PIN   PB13
+// ---------------- I. Pin map (Bluepill) ----------------
+#define LORA_CS_PIN         PA4
+#define LORA_RST_PIN        PA3
+#define LORA_DIO0_PIN       PA2
 
-#define HX_DOUT_PIN     PB0
-#define HX_SCK_PIN      PB1
+#define LOADCELL_DOUT_PIN   PB0
+#define LOADCELL_CLK_PIN    PB1
 
-#define DHT_PIN         PA8
-#define DHT_TYPE        DHT22
+#define SERVO_PIN           PA9          // timer pin suitable for Servo on Bluepill core
+#define IGNITION_RELAY_PIN  PC13         // active LOW to fire
+#define ALERT_PIN           PB10         // buzzer or LED (tone capable preferred)
+#define DHT_PIN             PA8
+#define DHT_TYPE            DHT22
 
-#define IGNITION_PIN    PC13      // Active-LOW
-#define SERVO_PIN       PA3
-#define BUZZ_PIN        PB10
+// ---------------- II. Radio and timings ----------------
+#define LORA_FREQ_HZ        433E6        // LoRa.begin expects Hz
+#define TELEMETRY_INTERVAL  100UL        // ms
+#define SENSOR_READ_INTERVAL 1000UL      // ms
+#define IGNITION_PULSE_MS   300UL        // ms, active LOW
+#define HANDSHAKE_BEEP_MS   300UL
 
-// ---------------- LoRa ----------------
-#define LORA_FREQ_HZ    433E6
-// Conservative link for reliability; must match GS:
-#define LORA_BW         125E3
-#define LORA_SF         7
-#define LORA_CR_DEN     5         // 4/5
-#define LORA_PREAMBLE   8
-#define LORA_SYNCWORD   0x34
+// Load cell
+#define CALIBRATION_FACTOR  -400.0f      // adjust to your calibration
 
-// ---------------- Timing ----------------
-#define TELEMETRY_PERIOD_MS   50UL     // 20 Hz
-#define DHT_PERIOD_MS         2000UL   // 0.5 Hz
-#define HX_AVG_SAMPLES        8
-#define IGNITION_PULSE_MS     300UL
-#define COUNTDOWN_MS          30000UL  // 30 seconds
+// Servo angles
+#define SERVO_LOCK_ANGLE    0            // Safe
+#define SERVO_ARM_ANGLE     90           // Armed
 
-// ---------------- Servo angles ----------------
-#define SERVO_DISARM_DEG  10
-#define SERVO_ARM_DEG     90
-
-// ---------------- States ----------------
-enum ArmState : int8_t { DISARMED=0, ARMED=1, COUNTDOWN=2, IGNITION=3 };
-
-// ---------------- Telemetry struct ----------------
-struct __attribute__((packed)) Telemetry_t {
-  float thrust;
-  float temperature;
-  float humidity;
-  int8_t isArmed;   // 0,1,2,3
-  uint16_t checksum;
+// ---------------- III. State machine ----------------
+enum SystemState_t {
+  STATE_DISARMED = 0,
+  STATE_ARMED    = 1,
+  STATE_COUNTDOWN= 2,
+  STATE_IGNITION = 3
 };
 
-// ---------------- Globals ----------------
-DHT dht(DHT_PIN, DHT_TYPE);
+// ---------------- IV. Globals ----------------
 Servo safetyServo;
+DHT dht(DHT_PIN, DHT_TYPE);
+HX711 LoadCell;
 
-volatile ArmState armState = DISARMED;
-unsigned long t_lastTx = 0;
-unsigned long t_lastDHT = 0;
+SystemState_t systemState = STATE_DISARMED;
 
-float g_tempC = NAN;
-float g_humi  = NAN;
-long  g_hx_offset = 0;     // tare offset
-float g_hx_scale  = 1.0f;  // counts-to-kg scaling, tune in field
+float tx_thrust = 0.0f;
+float tx_temp   = 0.0f;
+float tx_humi   = 0.0f;
 
-// Countdown/ignition
-bool countdownActive = false;
-unsigned long countdownStart = 0;
+unsigned long lastTelemetryTx   = 0;
+unsigned long lastSensorRead    = 0;
+unsigned long sequenceStartTime = 0;   // used for countdown and ignition pulse
+unsigned long lastToneToggle    = 0;
 
-bool ignitionPulse = false;
-unsigned long ignitionStart = 0;
+char txStringBuffer[96];
 
-// ---------------- HX711 minimal driver (blocking bit-bang, short) ----------------
-long hx711_readRaw() {
-  // Wait for data ready (DOUT goes LOW)
-  unsigned long t0 = millis();
-  while (digitalRead(HX_DOUT_PIN) == HIGH) {
-    if (millis() - t0 > 100) break; // prevent long stall
-    // brief spin
+// Debounce for handshake spam
+unsigned long lastZTime = 0;
+const unsigned long Z_DEBOUNCE_MS = 1000;
+
+// ---------------- V. Helpers ----------------
+float readLoadCell() {
+  return LoadCell.get_units(1);   // one sample average to keep latency low
+}
+
+void safeTone(unsigned freq, unsigned dur) {
+  // Some cores do not allow tone on any pin. If your core supports tone() on PB10 this works.
+  tone(ALERT_PIN, freq, dur);
+}
+
+void setSafety(bool lockState) {
+  if (!safetyServo.attached()) {
+    safetyServo.attach(SERVO_PIN);
   }
-
-  // Read 24 bits, MSB first
-  long value = 0;
-  noInterrupts();
-  for (int i = 0; i < 24; i++) {
-    digitalWrite(HX_SCK_PIN, HIGH);
-    // brief delay ~1-2 us
-    __asm__ __volatile__("nop\nnop\nnop\nnop\n");
-    value = (value << 1) | (digitalRead(HX_DOUT_PIN) ? 1 : 0);
-    digitalWrite(HX_SCK_PIN, LOW);
-    __asm__ __volatile__("nop\nnop\nnop\nnop\n");
-  }
-  // Set channel/gain to 128 (1 extra clock)
-  digitalWrite(HX_SCK_PIN, HIGH);
-  __asm__ __volatile__("nop\nnop\nnop\nnop\n");
-  digitalWrite(HX_SCK_PIN, LOW);
-  interrupts();
-
-  // Convert from 24-bit two's complement
-  if (value & 0x800000) value |= ~0xFFFFFFL;
-  return value;
+  safetyServo.write(lockState ? SERVO_LOCK_ANGLE : SERVO_ARM_ANGLE);
+  Serial.print("Safety: ");
+  Serial.println(lockState ? "LOCKED" : "UNLOCKED");
 }
 
-long hx711_readAverage(uint8_t times=HX_AVG_SAMPLES) {
-  long sum = 0;
-  for (uint8_t i=0; i<times; i++) sum += hx711_readRaw();
-  return sum / (long)times;
+void readEnvironmentSensors() {
+  float t = dht.readTemperature();
+  float h = dht.readHumidity();
+  if (!isnan(t)) tx_temp = t;
+  if (!isnan(h)) tx_humi = h;
 }
 
-float hx711_getThrust() {
-  long raw = hx711_readAverage();
-  long net = raw - g_hx_offset;
-  // Convert counts to kg (tune g_hx_scale), then to Newtons if needed.
-  // For now report "kg" as thrust proxy; multiply by 9.81 if you want N.
-  float kg = (float)net / g_hx_scale;
-  // You may prefer Newtons:
-  float N = kg * 9.81f;
-  return N; // Report Newtons as thrust
-}
+// ---------------- VI. Telemetry ----------------
+void transmitTelemetry() {
+  tx_thrust = readLoadCell();
 
-// ---------------- Utils ----------------
-uint16_t checksum16(const uint8_t* data, size_t len) {
-  uint32_t sum = 0;
-  for (size_t i=0; i<len; i++) sum += data[i];
-  return (uint16_t)(sum & 0xFFFF);
-}
+  int armedState = (systemState == STATE_IGNITION) ? 3 :
+                   (systemState == STATE_COUNTDOWN) ? 2 :
+                   (systemState == STATE_ARMED)     ? 1 : 0;
 
-void sendTelemetry() {
-  Telemetry_t pkt;
-  pkt.thrust = hx711_getThrust();
-  pkt.temperature = isnan(g_tempC) ? -1000.0f : g_tempC;
-  pkt.humidity    = isnan(g_humi)  ? -1000.0f : g_humi;
-  pkt.isArmed     = (int8_t)armState;
-  pkt.checksum    = 0;
-
-  // Compute checksum over struct with checksum field zeroed
-  pkt.checksum = checksum16(reinterpret_cast<const uint8_t*>(&pkt), sizeof(Telemetry_t));
+  // thrust,temp,humi,uptime,state
+  snprintf(txStringBuffer, sizeof(txStringBuffer),
+           "%.2f,%.1f,%.1f,%lu,%d\r\n",
+           tx_thrust, tx_temp, tx_humi, millis(), armedState);
 
   LoRa.beginPacket();
-  LoRa.write((uint8_t*)&pkt, sizeof(Telemetry_t));
-  LoRa.endPacket(true); // async
+  LoRa.print(txStringBuffer);
+  LoRa.endPacket(true);   // blocking is fine at 10 Hz telemetry
 }
 
-void setArmState(ArmState s) {
-  armState = s;
-  if (s == ARMED) {
-    safetyServo.write(SERVO_ARM_DEG);
-    digitalWrite(BUZZ_PIN, HIGH); delay(50); digitalWrite(BUZZ_PIN, LOW);
-  } else if (s == DISARMED) {
-    safetyServo.write(SERVO_DISARM_DEG);
-    digitalWrite(BUZZ_PIN, HIGH); delay(20); digitalWrite(BUZZ_PIN, LOW);
-    delay(20); digitalWrite(BUZZ_PIN, HIGH); delay(20); digitalWrite(BUZZ_PIN, LOW);
+// ---------------- VII. Command handling ----------------
+void handleCommand(char command) {
+  unsigned long now = millis();
+
+  switch (command) {
+    case 'Z': { // handshake ping
+      if (now - lastZTime < Z_DEBOUNCE_MS) break;   // ignore spam
+      lastZTime = now;
+      if (systemState == STATE_DISARMED) {
+        safeTone(1000, HANDSHAKE_BEEP_MS);
+        digitalWrite(ALERT_PIN, HIGH);
+        delay(20);
+        digitalWrite(ALERT_PIN, LOW);
+        Serial.println("Handshake received (SAFE).");
+      } // ignore Z in ARMED/COUNTDOWN/IGNITION
+      break;
+    }
+
+    case 'A': { // arm
+      if (systemState == STATE_DISARMED) {
+        systemState = STATE_ARMED;
+        setSafety(false);
+        Serial.println("CMD A: ARMED. Servo moved to ARM.");
+      }
+      break;
+    }
+
+    case 'S': { // safe
+      if (systemState != STATE_DISARMED) {
+        systemState = STATE_DISARMED;
+        setSafety(true);
+        digitalWrite(IGNITION_RELAY_PIN, HIGH);   // make sure OFF
+        noTone(ALERT_PIN);
+        Serial.println("CMD S: DISARMED. Servo moved to SAFE.");
+      }
+      break;
+    }
+
+    case 'L': { // 30 s countdown to ignition
+      if (systemState == STATE_ARMED) {
+        systemState = STATE_COUNTDOWN;
+        sequenceStartTime = now;
+        lastToneToggle = now;
+        Serial.println("CMD L: COUNTDOWN started (30 s).");
+      }
+      break;
+    }
+
+    case 'T': { // test pulse + tone
+      if (systemState == STATE_ARMED) {
+        systemState = STATE_IGNITION;
+        sequenceStartTime = now;
+        Serial.println("CMD T: TEST PULSE started.");
+      }
+      break;
+    }
   }
 }
 
-void startCountdown() {
-  countdownActive = true;
-  countdownStart = millis();
-  setArmState(COUNTDOWN);
+void checkLoRaCommand() {
+  int packetSize = LoRa.parsePacket();
+  if (!packetSize) return;
+
+  // Read first byte as command and flush the rest
+  char command = (char)LoRa.read();
+  while (LoRa.available()) LoRa.read();
+
+  Serial.print("RX Command: ");
+  Serial.println(command);
+
+  handleCommand(command);
 }
 
-void abortCountdown() {
-  countdownActive = false;
-  setArmState(DISARMED);
-}
+// ---------------- VIII. Timed sequences ----------------
+void handleSequences(unsigned long now) {
+  if (systemState == STATE_COUNTDOWN) {
+    const unsigned long COUNTDOWN_MS = 30000UL;
+    unsigned long elapsed   = now - sequenceStartTime;
+    long remaining = (long)COUNTDOWN_MS - (long)elapsed;
 
-void triggerIgnition() {
-  // Only allow if armed or in countdown
-  if (armState == ARMED || armState == COUNTDOWN) {
-    armState = IGNITION;
-    ignitionPulse = true;
-    ignitionStart = millis();
-    digitalWrite(IGNITION_PIN, LOW);   // active-LOW pulse starts
-    digitalWrite(BUZZ_PIN, HIGH);
+    if (remaining <= 0) {
+      // go to ignition pulse
+      systemState = STATE_IGNITION;
+      sequenceStartTime = now;
+      return;
+    }
+
+    // Beep cadence accelerates in last 10 s
+    unsigned long toneInterval = (remaining > 10000UL) ? 1000UL : 200UL;
+    if (now - lastToneToggle >= toneInterval) {
+      if (remaining > 50) safeTone((remaining > 10000UL) ? 500 : 1500, 100);
+      lastToneToggle = now;
+    }
+  }
+  else if (systemState == STATE_IGNITION) {
+    // Drive relay active LOW for IGNITION_PULSE_MS
+    if (now - sequenceStartTime < IGNITION_PULSE_MS) {
+      digitalWrite(IGNITION_RELAY_PIN, LOW);
+      safeTone(3000, 80);
+      digitalWrite(ALERT_PIN, HIGH);
+    } else {
+      digitalWrite(IGNITION_RELAY_PIN, HIGH);
+      noTone(ALERT_PIN);
+      // After test pulse or launch, auto safe
+      systemState = STATE_DISARMED;
+      setSafety(true);
+      Serial.println("Ignition pulse complete. Auto DISARM.");
+    }
   }
 }
 
-// ---------------- Command handling ----------------
-void handleLoRaCommand(uint8_t c) {
-  switch (c) {
-    case 'A': // Arm
-      setArmState(ARMED);
-      break;
-    case 'S': // Safe/Disarm
-      abortCountdown();
-      setArmState(DISARMED);
-      break;
-    case 'T': // 30s countdown then ignite
-      if (armState == ARMED) startCountdown();
-      break;
-    case 'L': // Immediate launch
-    case 'I': // Ignition
-      if (armState == ARMED || armState == COUNTDOWN) triggerIgnition();
-      break;
-    default:
-      // ignore
-      break;
-  }
-}
-
-// ---------------- Setup ----------------
+// ---------------- IX. Setup and loop ----------------
 void setup() {
-  pinMode(BUZZ_PIN, OUTPUT);
-  digitalWrite(BUZZ_PIN, LOW);
+  pinMode(ALERT_PIN, OUTPUT);
+  pinMode(IGNITION_RELAY_PIN, OUTPUT);
+  digitalWrite(IGNITION_RELAY_PIN, HIGH);    // idle HIGH
+  digitalWrite(ALERT_PIN, LOW);
 
-  pinMode(IGNITION_PIN, OUTPUT);
-  digitalWrite(IGNITION_PIN, HIGH); // idle HIGH (inactive for active-LOW relay)
+  Serial.begin(115200);
+  delay(50);
 
-  pinMode(HX_SCK_PIN, OUTPUT);
-  pinMode(HX_DOUT_PIN, INPUT);
-
-  safetyServo.attach(SERVO_PIN);
-  safetyServo.write(SERVO_DISARM_DEG);
+  // Sensors
+  LoadCell.begin(LOADCELL_DOUT_PIN, LOADCELL_CLK_PIN);
+  LoadCell.set_scale(CALIBRATION_FACTOR);
+  LoadCell.tare();
 
   dht.begin();
+  setSafety(true);
 
-  // LoRa init
+  // LoRa radio
   LoRa.setPins(LORA_CS_PIN, LORA_RST_PIN, LORA_DIO0_PIN);
   if (!LoRa.begin(LORA_FREQ_HZ)) {
-    // Buzz long if LoRa fails
-    digitalWrite(BUZZ_PIN, HIGH); delay(500); digitalWrite(BUZZ_PIN, LOW);
+    Serial.println("FATAL: LoRa init failed");
+    while (1) { delay(100); }
   }
-  LoRa.setSpreadingFactor(LORA_SF);
-  LoRa.setSignalBandwidth(LORA_BW);
-  LoRa.setCodingRate4(LORA_CR_DEN);
-  LoRa.setPreambleLength(LORA_PREAMBLE);
-  LoRa.setSyncWord(LORA_SYNCWORD);
-  LoRa.setTxPower(17); // 2-20 (uses PA_BOOST on RA-02)
+  // Align with GS and Web
+  LoRa.setSpreadingFactor(10);         // SF10
+  LoRa.setCodingRate4(5);              // 4/5
+  LoRa.setSignalBandwidth(125E3);      // 125 kHz
+  LoRa.setSyncWord(0x34);              // match GS
+  LoRa.setTxPower(17);                 // adjust if needed
 
-  // Basic HX711 tare
-  delay(300);
-  g_hx_offset = hx711_readAverage(16);
-  // Set a provisional scale. Calibrate in field:
-  // Place known mass M_kg, measure net counts = (raw - offset), set g_hx_scale = net / M_kg
-  g_hx_scale = 100000.0f; // placeholder; tune this
+  // First sensor snapshot
+  readEnvironmentSensors();
 
-  setArmState(DISARMED);
-  t_lastTx  = millis();
-  t_lastDHT = millis();
+  Serial.println("\n*** LPU ready. Waiting for commands. ***");
 }
 
-// ---------------- Loop ----------------
 void loop() {
   unsigned long now = millis();
 
-  // Poll DHT at low rate
-  if (now - t_lastDHT >= DHT_PERIOD_MS) {
-    t_lastDHT = now;
-    float t = dht.readTemperature(); // °C
-    float h = dht.readHumidity();
-    if (!isnan(t)) g_tempC = t;
-    if (!isnan(h)) g_humi  = h;
+  // Sequences
+  handleSequences(now);
+
+  // Sensors at 1 Hz
+  if (now - lastSensorRead >= SENSOR_READ_INTERVAL) {
+    lastSensorRead = now;
+    readEnvironmentSensors();
   }
 
-  // Handle countdown
-  if (countdownActive) {
-    unsigned long elapsed = now - countdownStart;
-    if (elapsed >= COUNTDOWN_MS) {
-      countdownActive = false;
-      triggerIgnition();
-    }
+  // Telemetry at 10 Hz
+  if (now - lastTelemetryTx >= TELEMETRY_INTERVAL) {
+    lastTelemetryTx = now;
+    transmitTelemetry();
   }
 
-  // Handle ignition pulse non-blocking
-  if (ignitionPulse) {
-    if (now - ignitionStart >= IGNITION_PULSE_MS) {
-      ignitionPulse = false;
-      digitalWrite(IGNITION_PIN, HIGH); // end pulse
-      digitalWrite(BUZZ_PIN, LOW);
-      // After ignition, remain in IGNITION state for GS to log; user can send 'S' to safe.
-    }
-  }
-
-  // Receive LoRa commands (single-byte)
-  int packetSize = LoRa.parsePacket();
-  if (packetSize > 0) {
-    while (LoRa.available()) {
-      uint8_t cmd = (uint8_t)LoRa.read();
-      handleLoRaCommand(cmd);
-    }
-  }
-
-  // Periodic telemetry TX
-  if (now - t_lastTx >= TELEMETRY_PERIOD_MS) {
-    t_lastTx = now;
-    sendTelemetry();
-  }
+  // Commands
+  checkLoRaCommand();
 }
