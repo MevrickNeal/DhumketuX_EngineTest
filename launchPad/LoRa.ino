@@ -14,17 +14,20 @@ void incoming() {
       state = IDLE;
       servo.write(90);         //change the direction if needed==================================
       digitalWrite(relay, 1);  //hip hip hoorray!
+      sendStatus();
     }
 
     else if (incoming == "ARM") {
       state = ARMED;
       servo.write(0);  //change the direction if needed==================================
+      sendStatus();
     }
 
     else if (incoming == "LAUNCH") {
       state = LAUNCHED;
       digitalWrite(relay, 0);  //hip hip hoorray!
       timer = millis();
+      sendStatus();
     }
   }
 }
