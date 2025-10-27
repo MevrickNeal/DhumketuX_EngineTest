@@ -49,18 +49,25 @@
             background: var(--card);
             border-radius: 12px;
             padding: 12px;
-            border: 1px solid rgba(255, 255, 255, 0.04);
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+            box-shadow: 0 6px 20px rgba(2, 6, 23, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.03);
         }
 
         h1 {
-            margin: 0 0 8px 0;
+            margin: 0 0 8px;
             font-size: 18px
         }
 
         .small {
             font-size: 13px;
             color: var(--muted)
+        }
+
+        /* Site View */
+        .site-view {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
         }
 
         #videoContainer {
@@ -77,7 +84,7 @@
             width: 100%;
             height: 100%;
             object-fit: cover;
-            background: #000
+            background: #000;
         }
 
         .controls-row {
@@ -87,19 +94,31 @@
             flex-wrap: wrap;
         }
 
-        #thrustCanvas {
-            width: 100%;
-            height: 260px;
-            border-radius: 8px;
-            background: linear-gradient(180deg, #041220, #02101a);
+        /* Graph */
+        #graphCard {
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            position: relative;
         }
 
-        #countdownDisplay {
-            text-align: center;
-            font-size: 52px;
+        #thrustCanvas {
+            background: linear-gradient(180deg, #041220, #02101a);
+            border-radius: 6px;
+            width: 100%;
+            height: 220px;
+            display: block;
+        }
+
+        .countdown-overlay {
+            position: absolute;
+            bottom: 10px;
+            right: 20px;
+            font-size: 50px;
             font-weight: 900;
-            margin-top: 8px;
-            color: var(--warn);
+            color: var(--accent);
+            text-shadow: 0 0 10px rgba(6, 182, 212, 0.5);
         }
 
         .status-row {
@@ -126,12 +145,16 @@
             border-radius: 50%;
         }
 
-        .led.red {
-            background: var(--bad);
+        .led.off {
+            background: #1f2937;
         }
 
         .led.green {
             background: var(--ok);
+        }
+
+        .led.red {
+            background: var(--bad);
         }
 
         .btn {
@@ -143,11 +166,13 @@
             border-radius: 8px;
             font-weight: 700;
             cursor: pointer;
+            box-shadow: 0 6px 18px rgba(6, 182, 212, 0.12);
         }
 
         .btn.secondary {
             background: rgba(255, 255, 255, 0.04);
             color: #cfe9ef;
+            border: 1px solid rgba(255, 255, 255, 0.03);
         }
 
         .btn.warn {
@@ -167,19 +192,17 @@
         }
 
         pre {
-            background: rgba(255, 255, 255, 0.03);
-            padding: 8px;
-            border-radius: 8px;
             height: 200px;
             overflow: auto;
-            font-size: 12px;
+            background: rgba(255, 255, 255, 0.02);
+            padding: 8px;
+            border-radius: 6px;
         }
 
         footer {
-            margin-top: 10px;
-            color: var(--muted);
+            margin-top: 18px;
             font-size: 12px;
-            text-align: center;
+            color: var(--muted)
         }
 
         @media(max-width:980px) {
@@ -190,69 +213,80 @@
             .bottom {
                 grid-template-columns: 1fr;
             }
+
+            #videoContainer {
+                height: 220px;
+            }
         }
     </style>
 </head>
 
 <body>
     <div class="app">
-
-        <!-- TOP -->
+        <!-- TOP: Camera + Graph -->
         <div class="top">
-            <div class="card">
+            <div class="card site-view">
                 <h1>Site View</h1>
                 <div class="small">Choose camera input and preview live feed</div>
                 <div id="videoContainer"><video id="siteVideo" autoplay playsinline muted></video></div>
-                <div class="controls-row" style="margin-top:8px;">
+                <div class="controls-row">
                     <label class="small">Camera:</label>
                     <select id="cameraSelect"></select>
                     <button id="startCamBtn" class="btn secondary">Start</button>
                     <button id="stopCamBtn" class="btn secondary">Stop</button>
                 </div>
             </div>
-
-            <div class="card">
+            <div id="graphCard" class="card">
                 <h1>Thrust Graph</h1>
                 <div class="small">Thrust (N) vs Time (s)</div>
-                <canvas id="thrustCanvas"></canvas>
-                <div id="countdownDisplay">--</div>
+                <canvas id="thrustCanvas" width="800" height="220"></canvas>
+                <div class="countdown-overlay" id="countdownDisplay">--</div>
             </div>
         </div>
 
-        <!-- BOTTOM -->
+        <!-- BOTTOM: 3 panels -->
         <div class="bottom">
             <div class="card">
                 <h1>Connection & Status</h1>
-                <div class="small">Connect to Ground Station via WebSerial</div>
-                <div class="row" style="margin-top:8px;">
+                <div class="row">
                     <button id="connectBtn" class="btn">Connect</button>
                     <button id="disconnectBtn" class="btn secondary" disabled>Disconnect</button>
-                    <button id="sendCheckBtn" class="btn secondary">CHECK</button>
+                    <button id="sendCheckBtn" class="btn secondary">Send CHECK</button>
                 </div>
-                <div class="status-row" style="margin-top:12px;">
+                <div style="margin-top:12px" class="status-row">
                     <div class="badge">
-                        <div id="connLed" class="led red"></div>
-                        <div>Connection</div>
+                        <div id="connLed" class="led off"></div>
+                        <div>
+                            <div class="small">Connection</div>
+                            <div id="connTxt">Unknown</div>
+                        </div>
                     </div>
                     <div class="badge">
-                        <div id="calLed" class="led red"></div>
-                        <div>Calibrated</div>
+                        <div id="calLed" class="led off"></div>
+                        <div>
+                            <div class="small">Calibrated</div>
+                            <div id="calTxt">Unknown</div>
+                        </div>
                     </div>
                     <div class="badge">
-                        <div id="stateTxt">IDLE</div>
+                        <div style="width:12px;height:12px;border-radius:4px;background:rgba(255,255,255,0.03)"></div>
+                        <div>
+                            <div class="small">State</div>
+                            <div id="stateTxt">IDLE</div>
+                        </div>
                     </div>
                 </div>
-                <div class="small" style="margin-top:10px;">Latest thrust: <span id="latestThrust">—</span></div>
+                <div class="small" style="margin-top:12px">Latest thrust: <span id="latestThrust">—</span></div>
             </div>
 
             <div class="card">
                 <h1>Controls</h1>
-                <div class="row" style="margin-top:8px;">
+                <div class="row" style="margin-top:8px">
                     <button id="armBtn" class="btn">ARM</button>
                     <button id="launchBtn" class="btn warn" disabled>LAUNCH</button>
                     <button id="cancelBtn" class="btn danger" disabled>CANCEL</button>
                 </div>
-                <div class="row" style="margin-top:10px;">
+                <div class="row" style="margin-top:8px">
                     <button id="saveCsvBtn" class="btn secondary">Save CSV</button>
                 </div>
             </div>
@@ -262,191 +296,79 @@
                 <pre id="logArea"></pre>
             </div>
         </div>
-
-        <footer>WebSerial Launch Control Interface — Chrome/Edge required</footer>
+        <footer class="small">WebSerial + getUserMedia demo • Use Chrome/Edge and allow camera & serial access</footer>
     </div>
 
     <script>
         (() => {
-
-            // ===== UI Elements =====
-            const c = id => document.getElementById(id);
-            const connLed = c("connLed"), calLed = c("calLed"), stateTxt = c("stateTxt"),
-                latestThrust = c("latestThrust"), logArea = c("logArea"),
-                countdownDisplay = c("countdownDisplay"), canvas = c("thrustCanvas"),
-                ctx = canvas.getContext("2d");
-            const btns = {
-                connect: c("connectBtn"), disconnect: c("disconnectBtn"),
-                sendCheck: c("sendCheckBtn"), arm: c("armBtn"),
-                launch: c("launchBtn"), cancel: c("cancelBtn"),
-                save: c("saveCsvBtn"), startCam: c("startCamBtn"),
-                stopCam: c("stopCamBtn")
-            };
-            const cameraSelect = c("cameraSelect"), siteVideo = c("siteVideo");
-
-            // ===== Serial State =====
-            let port, reader, writer, isConnected = false, isCalibrated = false;
-            let currentState = "IDLE", graphData = [], csvData = [], connTimeout = null;
-            let countdownTimer = null, countdown = 0;
-
-            // ===== Graph Parameters =====
-            function drawGraph() {
-                const w = canvas.width = canvas.clientWidth * devicePixelRatio;
-                const h = canvas.height = canvas.clientHeight * devicePixelRatio;
-                ctx.fillStyle = "#02101a"; ctx.fillRect(0, 0, w, h);
-                // Axes
-                ctx.strokeStyle = "rgba(255,255,255,0.2)";
-                ctx.beginPath();
-                ctx.moveTo(40 * devicePixelRatio, h - 30 * devicePixelRatio);
-                ctx.lineTo(w - 10, h - 30 * devicePixelRatio);
-                ctx.lineTo(w - 10, 20);
-                ctx.stroke();
-                ctx.font = 12 * devicePixelRatio + "px monospace";
-                ctx.fillStyle = "#aaa";
-                ctx.fillText("0", 25 * devicePixelRatio, h - 20 * devicePixelRatio);
-                ctx.fillText("Time (s)", w / 2 - 30 * devicePixelRatio, h - 5 * devicePixelRatio);
-                ctx.save(); ctx.translate(15 * devicePixelRatio, h / 2);
-                ctx.rotate(-Math.PI / 2); ctx.fillText("Thrust (N)", 0, 0); ctx.restore();
-
-                if (!graphData.length) return;
-                const pts = graphData.slice(-300);
-                const maxV = Math.max(10, ...pts.map(p => p.v));
-                const maxT = Math.max(...pts.map(p => p.t)) - pts[0].t;
-                ctx.beginPath();
-                pts.forEach((p, i) => {
-                    const x = 40 + ((p.t - pts[0].t) / maxT) * (w - 60);
-                    const y = (h - 30) - (p.v / maxV) * (h - 60);
-                    i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
-                });
-                ctx.strokeStyle = "#06b6d4"; ctx.lineWidth = 2 * devicePixelRatio; ctx.stroke();
-            }
-
-            // ===== Logging =====
-            function log(msg) { logArea.textContent += msg + "\\n"; logArea.scrollTop = logArea.scrollHeight; }
-
-            // ===== Connection State =====
-            function setConn(s) { isConnected = s; connLed.className = "led " + (s ? "green" : "red"); }
-            function setCal(s) { isCalibrated = s; calLed.className = "led " + (s ? "green" : "red"); }
-            function setState(s) {
-                currentState = s; stateTxt.textContent = s;
-                btns.launch.disabled = !(s === "ARMED" && isConnected && isCalibrated);
-                btns.cancel.disabled = (s === "IDLE");
-                btns.arm.disabled = (s !== "IDLE");
-            }
-
-            // ===== Serial Connection =====
+            let port, reader, writer, keepReading = false;
+            const g = id => document.getElementById(id);
+            const canvas = g("thrustCanvas"), ctx = canvas.getContext("2d"), countdownDisplay = g("countdownDisplay");
+            const connLed = g("connLed"), calLed = g("calLed"), connTxt = g("connTxt"), calTxt = g("calTxt"), stateTxt = g("stateTxt"), logArea = g("logArea"), latestThrust = g("latestThrust");
+            const cameraSelect = g("cameraSelect"), siteVideo = g("siteVideo");
+            const btns = { connect: g("connectBtn"), disconnect: g("disconnectBtn"), sendCheck: g("sendCheckBtn"), arm: g("armBtn"), launch: g("launchBtn"), cancel: g("cancelBtn"), save: g("saveCsvBtn"), startCam: g("startCamBtn"), stopCam: g("stopCamBtn") };
+            let isConnected = false, isCalibrated = false, state = "IDLE", graphData = [], csvData = [];
+            let countdownInt = null, connTimer = null;
+            function log(m) { logArea.textContent += `[${new Date().toLocaleTimeString()}] ${m}\n`; logArea.scrollTop = logArea.scrollHeight; }
+            function setConn(v) { isConnected = v; connLed.className = "led " + (v ? "green" : "red"); connTxt.textContent = v ? "Connected" : "Disconnected"; updateLaunch(); }
+            function setCal(v) { isCalibrated = v; calLed.className = "led " + (v ? "green" : "red"); calTxt.textContent = v ? "Calibrated" : "Not Calibrated"; updateLaunch(); }
+            function setState(s) { state = s; stateTxt.textContent = s; btns.cancel.disabled = (s === "IDLE"); btns.arm.disabled = (s !== "IDLE"); updateLaunch(); }
+            function updateLaunch() { btns.launch.disabled = !(isConnected && isCalibrated && state === "ARMED"); }
             async function connectSerial() {
                 try {
-                    port = await navigator.serial.requestPort();
-                    await port.open({ baudRate: 115200 });
-                    writer = port.writable.getWriter();
-                    const dec = new TextDecoderStream();
-                    port.readable.pipeTo(dec.writable);
-                    reader = dec.readable.getReader();
-                    readLoop();
-                    setConn(true);
-                    btns.connect.disabled = true; btns.disconnect.disabled = false;
-                    log("Connected to Ground Station");
-                } catch (e) { log("Error opening port: " + e); }
+                    port = await navigator.serial.requestPort(); await port.open({ baudRate: 115200 });
+                    writer = port.writable.getWriter(); const dec = new TextDecoderStream(); port.readable.pipeTo(dec.writable); reader = dec.readable.getReader();
+                    keepReading = true; readLoop(); btns.connect.disabled = true; btns.disconnect.disabled = false; setConn(true); log("Serial connected");
+                }
+                catch (e) { log("Serial error:" + e); }
             }
             async function disconnectSerial() {
-                if (reader) { await reader.cancel(); reader.releaseLock(); }
-                if (writer) { writer.releaseLock(); }
-                if (port) { await port.close(); }
-                setConn(false);
-                btns.connect.disabled = false; btns.disconnect.disabled = true;
-                log("Disconnected");
+                keepReading = false; try { if (reader) { await reader.cancel(); reader.releaseLock(); reader = null; } if (writer) { writer.releaseLock(); writer = null; } if (port) { await port.close(); port = null; } }
+                    catch (e) { log("Disconnect error:" + e); } setConn(false); btns.connect.disabled = false; btns.disconnect.disabled = true;
             }
-            async function readLoop() {
-                let buffer = "";
-                while (true) {
-                    const { value, done } = await reader.read();
-                    if (done) break;
-                    if (value) {
-                        buffer += value;
-                        let lines = buffer.split(/\\r?\\n/);
-                        buffer = lines.pop();
-                        lines.forEach(handleLine);
-                    }
-                }
+            async function readLoop() { let buf = ""; while (keepReading && reader) { const { value, done } = await reader.read(); if (done) break; if (value) { buf += value; let lines = buf.split(/\r?\n/); buf = lines.pop(); lines.forEach(l => l.trim() && handleLine(l.trim())); } } }
+            async function writeLine(t) { if (!writer) return; await writer.write(new TextEncoder().encode(t + "\n")); log("→ " + t); }
+            function handleLine(l) {
+                log("← " + l); setConn(true); resetConnTimer();
+                if (l.startsWith("OK") || l.startsWith("NO")) { const a = l.split(","); if (a.length == 2) { const val = parseFloat(a[1]) * 9.80665; latestThrust.textContent = val.toFixed(2) + " N"; pushData(Date.now(), val); setCal(l.startsWith("OK")); } return; }
+                if (l.includes("ARM")) setState("ARMED"); else if (l.includes("LAUNCH")) setState("LAUNCHED"); else if (l.includes("IDLE")) setState("IDLE");
             }
-            async function writeLine(t) {
-                if (!writer) return;
-                await writer.write(new TextEncoder().encode(t + "\\n"));
-                log("→ " + t);
+            function resetConnTimer() { clearTimeout(connTimer); connTimer = setTimeout(() => { setConn(false); setCal(false); }, 7000); }
+            function pushData(t, v) { graphData.push({ t, v }); csvData.push({ t, v }); if (graphData.length > 500) graphData.shift(); drawGraph(); }
+            function drawGraph() {
+                const w = canvas.width = canvas.clientWidth * devicePixelRatio, h = canvas.height = canvas.clientHeight * devicePixelRatio;
+                ctx.clearRect(0, 0, w, h); ctx.fillStyle = "#02101a"; ctx.fillRect(0, 0, w, h);
+                ctx.strokeStyle = "rgba(255,255,255,0.1)"; ctx.lineWidth = 1;
+                for (let i = 0; i <= 5; i++) { const y = h - (i / 5) * h; ctx.beginPath(); ctx.moveTo(40, y); ctx.lineTo(w, y); ctx.stroke(); }
+                ctx.strokeStyle = "rgba(255,255,255,0.1)";
+                for (let i = 0; i <= 10; i++) { const x = 40 + (i / 10) * (w - 60); ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h - 30); ctx.stroke(); }
+                ctx.fillStyle = "#aaa"; ctx.font = 12 * devicePixelRatio + "px sans-serif"; ctx.fillText("Time (s)", w / 2 - 30, h - 8);
+                ctx.save(); ctx.translate(12, h / 2 + 30); ctx.rotate(-Math.PI / 2); ctx.fillText("Thrust (N)", 0, 0); ctx.restore();
+                if (!graphData.length) return; const pts = graphData.slice(-300); const maxV = Math.max(10, ...pts.map(p => p.v));
+                ctx.beginPath(); pts.forEach((p, i) => { const x = 40 + (i / (pts.length - 1 || 1)) * (w - 60), y = h - 30 - (p.v / maxV) * (h - 60); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+                ctx.strokeStyle = "#06b6d4"; ctx.lineWidth = 2 * devicePixelRatio; ctx.stroke();
             }
-
-            // ===== Incoming Handler =====
-            function handleLine(line) {
-                line = line.trim(); if (!line) return;
-                log("← " + line);
-                setConn(true); clearTimeout(connTimeout);
-                connTimeout = setTimeout(() => setConn(false), 7000);
-
-                if (line.startsWith("OK") || line.startsWith("NO")) {
-                    const parts = line.split(",");
-                    const kg = parseFloat(parts[1] || "0");
-                    const n = kg * 9.80665;
-                    latestThrust.textContent = n.toFixed(2) + " N";
-                    graphData.push({ t: Date.now() / 1000, v: n });
-                    csvData.push({ t: Date.now() / 1000, v: n });
-                    drawGraph();
-                    setCal(line.startsWith("OK"));
-                }
-                if (line.includes("ARM")) setState("ARMED");
-                if (line.includes("LAUNCH")) setState("LAUNCHED");
-                if (line.includes("IDLE")) setState("IDLE");
+            function startCountdown(s) {
+                stopCountdown(); let t = s; countdownDisplay.textContent = t;
+                countdownInt = setInterval(() => { t--; countdownDisplay.textContent = t; if (t <= 0) { stopCountdown(); setState("LAUNCHED"); } }, 1000);
             }
-
-            // ===== Countdown =====
-            function startCountdown(sec) {
-                clearInterval(countdownTimer);
-                countdown = sec;
-                countdownDisplay.textContent = sec;
-                countdownTimer = setInterval(() => {
-                    countdown--;
-                    countdownDisplay.textContent = countdown;
-                    if (countdown <= 0) {
-                        clearInterval(countdownTimer);
-                        countdownDisplay.textContent = "0";
-                        setState("LAUNCHED");
-                    }
-                }, 1000);
-            }
-
-            // ===== Buttons =====
-            btns.connect.onclick = connectSerial;
-            btns.disconnect.onclick = disconnectSerial;
-            btns.sendCheck.onclick = () => writeLine("CHECK");
+            function stopCountdown() { clearInterval(countdownInt); countdownDisplay.textContent = "--"; }
+            btns.connect.onclick = connectSerial; btns.disconnect.onclick = disconnectSerial;
+            btns.sendCheck.onclick = () => { writeLine("CHECK"); resetConnTimer(); };
             btns.arm.onclick = () => { writeLine("ARM"); setState("ARMED"); };
             btns.launch.onclick = () => { writeLine("LAUNCH"); startCountdown(30); setState("COUNTDOWN"); };
-            btns.cancel.onclick = () => { writeLine("IDLE"); setState("IDLE"); clearInterval(countdownTimer); countdownDisplay.textContent = "--"; };
+            btns.cancel.onclick = () => { writeLine("IDLE"); stopCountdown(); setState("IDLE"); };
             btns.save.onclick = () => {
-                let csv = "time_s,thrust_N\\n";
-                csvData.forEach(p => csv += p.t + "," + p.v + "\\n");
-                const blob = new Blob([csv], { type: "text/csv" });
-                const a = document.createElement("a");
-                a.href = URL.createObjectURL(blob); a.download = "thrust.csv"; a.click();
+                let csv = "time,thrust\n"; csvData.forEach(p => csv += `${p.t},${p.v}\n`);
+                const b = new Blob([csv], { type: "text/csv" }); const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = "thrust.csv"; a.click();
             };
-
-            // ===== Camera =====
-            let stream = null;
-            async function listCams() {
-                const devs = await navigator.mediaDevices.enumerateDevices();
-                const cams = devs.filter(d => d.kind === "videoinput");
-                cameraSelect.innerHTML = cams.map((c, i) => \\`<option value="${c.deviceId}">${c.label || 'Camera ' + (i + 1)}</option>\\`).join("");
+            let stream = null; async function listCams() {
+                const d = await navigator.mediaDevices.enumerateDevices();
+                cameraSelect.innerHTML = d.filter(v => v.kind === "videoinput").map((c, i) => `<option value="${c.deviceId}">${c.label || "Camera " + (i + 1)}</option>`).join("");
             }
-            async function startCam() {
-                const id = cameraSelect.value;
-                stream = await navigator.mediaDevices.getUserMedia({ video: { deviceId: id }, audio: false });
-                siteVideo.srcObject = stream;
-            }
+            async function startCam() { const id = cameraSelect.value; stream = await navigator.mediaDevices.getUserMedia({ video: { deviceId: id }, audio: false }); siteVideo.srcObject = stream; }
             function stopCam() { if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; siteVideo.srcObject = null; } }
             btns.startCam.onclick = startCam; btns.stopCam.onclick = stopCam; listCams();
-
-            // ===== Auto CHECK every 5s in IDLE =====
-            setInterval(() => { if (isConnected && currentState === "IDLE") writeLine("CHECK"); }, 5000);
-
         })();
     </script>
 </body>
