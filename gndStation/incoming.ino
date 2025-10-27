@@ -8,7 +8,6 @@ void incoming() {
     // Serial.print("Received raw: ");
     // Serial.println(received);
 
-    // Try to parse the response if it's in format "OK,<float>"
     if (received.startsWith("OK")) {
       int commaIndex = received.indexOf(',');
       if (commaIndex > 0 && commaIndex < received.length() - 1) {
@@ -20,6 +19,6 @@ void incoming() {
       }
     }
 
-    else Serial.print("Launch Pad not Ready");
+    else Serial.println("Launch Pad not Ready");
   }
 }

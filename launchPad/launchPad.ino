@@ -73,7 +73,7 @@ void loop() {
   if (r) {
     Serial.println(r);
     if (r == 1) calibrate_scale();
-    else if (r == 2) check_weight();
+    else if (r == 2) while (!push()) check_weight();
   }
 
   if (state == LAUNCHED) {

@@ -12,7 +12,7 @@ void incoming() {
 
     else if (incoming == "IDLE") {
       state = IDLE;
-      servo.write(90);  //change the direction if needed==================================
+      servo.write(90);         //change the direction if needed==================================
       digitalWrite(relay, 1);  //hip hip hoorray!
     }
 
@@ -32,6 +32,7 @@ void incoming() {
 
 void sendStatus() {
   Serial.println("Responding with OK and load cell value...");
+  check_weight();
   LoRa.beginPacket();
   (calibrated) ? LoRa.print("OK,") : LoRa.print("NO,") LoRa.print(weight, 1);  // send 2 decimal precision
   LoRa.endPacket();

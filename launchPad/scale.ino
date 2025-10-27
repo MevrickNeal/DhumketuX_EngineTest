@@ -11,11 +11,7 @@ void calibrate_scale() {
 }
 
 void check_weight() {
-  while (!push()) {
-    tare = hx711.readChannelBlocking(CHAN_A_GAIN_64);
-    weight = (float)(tare - avg_tare) / weight_scale;
-    Serial.print(tare);
-    Serial.print(" ");
-    Serial.println(weight, 2);
-  }
+  tare = hx711.readChannelBlocking(CHAN_A_GAIN_64);
+  weight = (float)(tare - avg_tare) / weight_scale;
+  Serial.println(weight, 2);
 }

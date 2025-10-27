@@ -21,7 +21,7 @@ float loadCellValue = 0.0;
 uint32_t timer = millis();
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
   while (!Serial)
     ;
 
@@ -60,8 +60,6 @@ void loop() {
 
 
 void sendCommand(String cmd) {
-  Serial.print("Sending command: ");
-  Serial.println(cmd);
   LoRa.beginPacket();
   LoRa.print(cmd);
   LoRa.endPacket();
