@@ -25,7 +25,7 @@ void setup() {
   while (!Serial)
     ;
 
-  Serial.println("Ground Station Initializing...");
+//  Serial.println("Ground Station Initializing...");
 
   LoRa.setPins(NSS_PIN, RST_PIN, DIO0_PIN);
   if (!LoRa.begin(433E6)) {
@@ -34,8 +34,8 @@ void setup() {
       ;
   }
 
-  Serial.println("LoRa initialized successfully!");
-  Serial.println("Type ARM, LAUNCH, or CHECK in Serial Monitor.");
+//  Serial.println("LoRa initialized successfully!");
+//  Serial.println("Type ARM, LAUNCH, or CHECK in Serial Monitor.");
 }
 
 void loop() {
