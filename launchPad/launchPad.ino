@@ -82,4 +82,11 @@ void loop() {
       sendStatus();
     }
   }
+
+  else if (state == ARMED) {
+    if (millis() - timer > 1000) {
+      beep(2);
+      timer = millis();
+    }
+  }
 }
