@@ -85,8 +85,8 @@ void loop() {
       timer = millis();
       sendStatus();
     }
-    if (millis() - idle_timer > 30000) {
-      state = IDLE;
+    if (millis() - idle_timer > 10000) {
+      // state = IDLE;
       servo.write(servo_disram);         //change the direction if needed==================================
       digitalWrite(relay, 1);  
     }
