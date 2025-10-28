@@ -63,7 +63,6 @@
             color: var(--muted)
         }
 
-        /* Site View */
         .site-view {
             display: flex;
             flex-direction: column;
@@ -94,7 +93,6 @@
             flex-wrap: wrap;
         }
 
-        /* Graph */
         #graphCard {
             padding: 10px;
             display: flex;
@@ -107,7 +105,7 @@
             background: linear-gradient(180deg, #041220, #02101a);
             border-radius: 6px;
             width: 100%;
-            height: 220px;
+            height: 260px;
             display: block;
         }
 
@@ -119,6 +117,17 @@
             font-weight: 900;
             color: var(--accent);
             text-shadow: 0 0 10px rgba(6, 182, 212, 0.5);
+        }
+
+        .tooltip {
+            position: absolute;
+            pointer-events: none;
+            background: rgba(0, 0, 0, 0.75);
+            color: #e6eef6;
+            padding: 6px 8px;
+            border-radius: 6px;
+            font-size: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .status-row {
@@ -167,6 +176,7 @@
             font-weight: 700;
             cursor: pointer;
             box-shadow: 0 6px 18px rgba(6, 182, 212, 0.12);
+            transition: opacity 0.2s ease;
         }
 
         .btn.secondary {
@@ -182,6 +192,11 @@
 
         .btn.danger {
             background: var(--bad);
+        }
+
+        .btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
         }
 
         .row {
@@ -239,12 +254,13 @@
             <div id="graphCard" class="card">
                 <h1>Thrust Graph</h1>
                 <div class="small">Thrust (N) vs Time (s)</div>
-                <canvas id="thrustCanvas" width="800" height="220"></canvas>
+                <canvas id="thrustCanvas" width="800" height="260"></canvas>
                 <div class="countdown-overlay" id="countdownDisplay">--</div>
+                <div id="tooltip" class="tooltip" style="display:none;"></div>
             </div>
         </div>
 
-        <!-- BOTTOM: 3 panels -->
+        <!-- BOTTOM: Connection, Controls, Log -->
         <div class="bottom">
             <div class="card">
                 <h1>Connection & Status</h1>
@@ -253,7 +269,7 @@
                     <button id="disconnectBtn" class="btn secondary" disabled>Disconnect</button>
                     <button id="sendCheckBtn" class="btn secondary">Send CHECK</button>
                 </div>
-                <div style="margin-top:12px" class="status-row">
+                <div class="status-row" style="margin-top:10px">
                     <div class="badge">
                         <div id="connLed" class="led off"></div>
                         <div>
@@ -276,7 +292,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="small" style="margin-top:12px">Latest thrust: <span id="latestThrust">—</span></div>
+                <div class="small" style="margin-top:10px">Latest thrust: <span id="latestThrust">—</span></div>
             </div>
 
             <div class="card">
@@ -303,12 +319,12 @@
         (() => {
             let port, reader, writer, keepReading = false;
             const g = id => document.getElementById(id);
-            const canvas = g("thrustCanvas"), ctx = canvas.getContext("2d"), countdownDisplay = g("countdownDisplay");
+            const canvas = g("thrustCanvas"), ctx = canvas.getContext("2d"), tooltip = g("tooltip"), countdownDisplay = g("countdownDisplay");
             const connLed = g("connLed"), calLed = g("calLed"), connTxt = g("connTxt"), calTxt = g("calTxt"), stateTxt = g("stateTxt"), logArea = g("logArea"), latestThrust = g("latestThrust");
             const cameraSelect = g("cameraSelect"), siteVideo = g("siteVideo");
             const btns = { connect: g("connectBtn"), disconnect: g("disconnectBtn"), sendCheck: g("sendCheckBtn"), arm: g("armBtn"), launch: g("launchBtn"), cancel: g("cancelBtn"), save: g("saveCsvBtn"), startCam: g("startCamBtn"), stopCam: g("stopCamBtn") };
             let isConnected = false, isCalibrated = false, state = "IDLE", graphData = [], csvData = [];
-            let countdownInt = null, connTimer = null;
+            let startTime = Date.now(), connTimer = null, countdownInt = null;
             function log(m) { logArea.textContent += `[${new Date().toLocaleTimeString()}] ${m}\n`; logArea.scrollTop = logArea.scrollHeight; }
             function setConn(v) { isConnected = v; connLed.className = "led " + (v ? "green" : "red"); connTxt.textContent = v ? "Connected" : "Disconnected"; updateLaunch(); }
             function setCal(v) { isCalibrated = v; calLed.className = "led " + (v ? "green" : "red"); calTxt.textContent = v ? "Calibrated" : "Not Calibrated"; updateLaunch(); }
@@ -330,33 +346,69 @@
             async function writeLine(t) { if (!writer) return; await writer.write(new TextEncoder().encode(t + "\n")); log("→ " + t); }
             function handleLine(l) {
                 log("← " + l); setConn(true); resetConnTimer();
-                if (l.startsWith("OK") || l.startsWith("NO")) { const a = l.split(","); if (a.length == 2) { const val = parseFloat(a[1]) * 9.80665; latestThrust.textContent = val.toFixed(2) + " N"; pushData(Date.now(), val); setCal(l.startsWith("OK")); } return; }
+                if (l.startsWith("OK") || l.startsWith("NO")) { const a = l.split(","); if (a.length == 2) { const val = parseFloat(a[1]) * 9.80665; const t = (Date.now() - startTime) / 1000; latestThrust.textContent = val.toFixed(2) + " N"; pushData(t, val); setCal(l.startsWith("OK")); } return; }
                 if (l.includes("ARM")) setState("ARMED"); else if (l.includes("LAUNCH")) setState("LAUNCHED"); else if (l.includes("IDLE")) setState("IDLE");
             }
             function resetConnTimer() { clearTimeout(connTimer); connTimer = setTimeout(() => { setConn(false); setCal(false); }, 7000); }
             function pushData(t, v) { graphData.push({ t, v }); csvData.push({ t, v }); if (graphData.length > 500) graphData.shift(); drawGraph(); }
             function drawGraph() {
                 const w = canvas.width = canvas.clientWidth * devicePixelRatio, h = canvas.height = canvas.clientHeight * devicePixelRatio;
-                ctx.clearRect(0, 0, w, h); ctx.fillStyle = "#02101a"; ctx.fillRect(0, 0, w, h);
-                ctx.strokeStyle = "rgba(255,255,255,0.1)"; ctx.lineWidth = 1;
+                ctx.clearRect(0, 0, w, h);
+                ctx.fillStyle = "#02101a"; ctx.fillRect(0, 0, w, h);
+                if (!graphData.length) return;
+                const pts = graphData.slice(-300);
+                const tMin = pts[0].t, tMax = pts[pts.length - 1].t;
+                const vMax = Math.max(10, ...pts.map(p => p.v));
+                // grid
+                ctx.strokeStyle = "rgba(255,255,255,0.08)";
                 for (let i = 0; i <= 5; i++) { const y = h - (i / 5) * h; ctx.beginPath(); ctx.moveTo(40, y); ctx.lineTo(w, y); ctx.stroke(); }
-                ctx.strokeStyle = "rgba(255,255,255,0.1)";
-                for (let i = 0; i <= 10; i++) { const x = 40 + (i / 10) * (w - 60); ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h - 30); ctx.stroke(); }
-                ctx.fillStyle = "#aaa"; ctx.font = 12 * devicePixelRatio + "px sans-serif"; ctx.fillText("Time (s)", w / 2 - 30, h - 8);
-                ctx.save(); ctx.translate(12, h / 2 + 30); ctx.rotate(-Math.PI / 2); ctx.fillText("Thrust (N)", 0, 0); ctx.restore();
-                if (!graphData.length) return; const pts = graphData.slice(-300); const maxV = Math.max(10, ...pts.map(p => p.v));
-                ctx.beginPath(); pts.forEach((p, i) => { const x = 40 + (i / (pts.length - 1 || 1)) * (w - 60), y = h - 30 - (p.v / maxV) * (h - 60); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+                const tickCount = 6;
+                for (let i = 0; i <= tickCount; i++) {
+                    const x = 40 + (i / tickCount) * (w - 60);
+                    const tVal = tMin + (i / tickCount) * (tMax - tMin);
+                    ctx.fillStyle = "#777"; ctx.font = 11 * devicePixelRatio + "px monospace";
+                    ctx.fillText(tVal.toFixed(1), x - 10, h - 5);
+                }
+                ctx.save(); ctx.translate(12, h / 2); ctx.rotate(-Math.PI / 2);
+                ctx.fillText("Thrust (N)", 0, 0); ctx.restore();
+                // curve
+                ctx.beginPath();
+                pts.forEach((p, i) => {
+                    const x = 40 + ((p.t - tMin) / (tMax - tMin || 1)) * (w - 60);
+                    const y = h - 30 - (p.v / vMax) * (h - 60);
+                    i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+                });
                 ctx.strokeStyle = "#06b6d4"; ctx.lineWidth = 2 * devicePixelRatio; ctx.stroke();
             }
+            // Hover tooltip
+            canvas.addEventListener("mousemove", e => {
+                if (!graphData.length) return;
+                const rect = canvas.getBoundingClientRect();
+                const x = (e.clientX - rect.left) * devicePixelRatio;
+                const w = canvas.width, h = canvas.height;
+                const pts = graphData.slice(-300);
+                const tMin = pts[0].t, tMax = pts[pts.length - 1].t, vMax = Math.max(10, ...pts.map(p => p.v));
+                const t = (tMin + (tMax - tMin) * (x - 40) / (w - 60));
+                let closest = pts[0];
+                for (const p of pts) if (Math.abs(p.t - t) < Math.abs(closest.t - t)) closest = p;
+                const y = h - 30 - (closest.v / vMax) * (h - 60);
+                tooltip.style.display = "block";
+                tooltip.style.left = e.clientX + 15 + "px";
+                tooltip.style.top = e.clientY - 15 + "px";
+                tooltip.textContent = `t=${closest.t.toFixed(2)}s | ${closest.v.toFixed(2)}N`;
+            });
+            canvas.addEventListener("mouseleave", () => tooltip.style.display = "none");
+
+            // Countdown logic with delayed LAUNCH send
             function startCountdown(s) {
                 stopCountdown(); let t = s; countdownDisplay.textContent = t;
-                countdownInt = setInterval(() => { t--; countdownDisplay.textContent = t; if (t <= 0) { stopCountdown(); setState("LAUNCHED"); } }, 1000);
+                countdownInt = setInterval(() => { t--; countdownDisplay.textContent = t; if (t <= 0) { stopCountdown(); writeLine("LAUNCH"); setState("LAUNCHED"); } }, 1000);
             }
             function stopCountdown() { clearInterval(countdownInt); countdownDisplay.textContent = "--"; }
             btns.connect.onclick = connectSerial; btns.disconnect.onclick = disconnectSerial;
             btns.sendCheck.onclick = () => { writeLine("CHECK"); resetConnTimer(); };
             btns.arm.onclick = () => { writeLine("ARM"); setState("ARMED"); };
-            btns.launch.onclick = () => { writeLine("LAUNCH"); startCountdown(30); setState("COUNTDOWN"); };
+            btns.launch.onclick = () => { startCountdown(30); setState("COUNTDOWN"); };
             btns.cancel.onclick = () => { writeLine("IDLE"); stopCountdown(); setState("IDLE"); };
             btns.save.onclick = () => {
                 let csv = "time,thrust\n"; csvData.forEach(p => csv += `${p.t},${p.v}\n`);
@@ -372,5 +424,4 @@
         })();
     </script>
 </body>
-
 </html>
