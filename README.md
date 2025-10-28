@@ -17,6 +17,7 @@
 </p>
 
 ---
+<img width="1875" height="908" alt="image" src="https://github.com/user-attachments/assets/24384edd-1439-4571-b1c5-bd823c030f97" />
 
 ## 🧭 1. Project Overview & Architecture
 
