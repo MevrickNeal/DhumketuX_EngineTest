@@ -359,7 +359,6 @@
                 const pts = graphData.slice(-300);
                 const tMin = pts[0].t, tMax = pts[pts.length - 1].t;
                 const vMax = Math.max(10, ...pts.map(p => p.v));
-                // grid
                 ctx.strokeStyle = "rgba(255,255,255,0.08)";
                 for (let i = 0; i <= 5; i++) { const y = h - (i / 5) * h; ctx.beginPath(); ctx.moveTo(40, y); ctx.lineTo(w, y); ctx.stroke(); }
                 const tickCount = 6;
@@ -371,7 +370,6 @@
                 }
                 ctx.save(); ctx.translate(12, h / 2); ctx.rotate(-Math.PI / 2);
                 ctx.fillText("Thrust (N)", 0, 0); ctx.restore();
-                // curve
                 ctx.beginPath();
                 pts.forEach((p, i) => {
                     const x = 40 + ((p.t - tMin) / (tMax - tMin || 1)) * (w - 60);
@@ -391,7 +389,6 @@
                 const t = (tMin + (tMax - tMin) * (x - 40) / (w - 60));
                 let closest = pts[0];
                 for (const p of pts) if (Math.abs(p.t - t) < Math.abs(closest.t - t)) closest = p;
-                const y = h - 30 - (closest.v / vMax) * (h - 60);
                 tooltip.style.display = "block";
                 tooltip.style.left = e.clientX + 15 + "px";
                 tooltip.style.top = e.clientY - 15 + "px";
@@ -399,17 +396,27 @@
             });
             canvas.addEventListener("mouseleave", () => tooltip.style.display = "none");
 
-            // Countdown logic with delayed LAUNCH send
+            // Countdown logic (Launch delayed, Cancel immediate)
             function startCountdown(s) {
                 stopCountdown(); let t = s; countdownDisplay.textContent = t;
                 countdownInt = setInterval(() => { t--; countdownDisplay.textContent = t; if (t <= 0) { stopCountdown(); writeLine("LAUNCH"); setState("LAUNCHED"); } }, 1000);
             }
-            function stopCountdown() { clearInterval(countdownInt); countdownDisplay.textContent = "--"; }
+            function stopCountdown() { clearInterval(countdownInt); countdownInt = null; countdownDisplay.textContent = "--"; }
+
             btns.connect.onclick = connectSerial; btns.disconnect.onclick = disconnectSerial;
             btns.sendCheck.onclick = () => { writeLine("CHECK"); resetConnTimer(); };
             btns.arm.onclick = () => { writeLine("ARM"); setState("ARMED"); };
             btns.launch.onclick = () => { startCountdown(30); setState("COUNTDOWN"); };
-            btns.cancel.onclick = () => { writeLine("IDLE"); stopCountdown(); setState("IDLE"); };
+
+            // FIXED Cancel: always works, always immediate
+            btns.cancel.addEventListener("click", () => {
+                stopCountdown();
+                writeLine("IDLE");
+                setState("IDLE");
+                setCal(false);
+                log("Cancel pressed — countdown stopped and IDLE sent immediately");
+            });
+
             btns.save.onclick = () => {
                 let csv = "time,thrust\n"; csvData.forEach(p => csv += `${p.t},${p.v}\n`);
                 const b = new Blob([csv], { type: "text/csv" }); const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = "thrust.csv"; a.click();
@@ -424,4 +431,5 @@
         })();
     </script>
 </body>
+
 </html>
