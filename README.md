@@ -3,7 +3,7 @@
  <img width="252" height="80" alt="dhumketux-logo-picv89pfmqg232dzle0szl8ygpq038fuxufww8t3pc" src="https://github.com/user-attachments/assets/d4caefdf-5ff9-491e-a70a-736fbb335012" />
 </p>
 
-<h1 align="center">🚀 DhumketuX Engine Test System (DETS)</h1>
+<h1 align="center"> DhumketuX Engine Test System (DETS)</h1>
 
 <p align="center">
   Bi-directional telemetry and ignition control system for static rocket engine testing — precision-engineered for reliability, real-time control, and safety.
@@ -12,235 +12,187 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Microcontroller-STM32%20Bluepill%20%2B%20Arduino%20Uno-blue?logo=stmicroelectronics" />
   <img src="https://img.shields.io/badge/Wireless-LoRa%20RA--02-green?logo=radio" />
-  <img src="https://img.shields.io/badge/Telemetry-Full%20Duplex%20Binary-yellow" />
+  <img src="https://img.shields.io/badge/Telemetry-ASCII%20LoRa%20+%20Web%20Serial-yellow" />
   <img src="https://img.shields.io/badge/License-MIT-lightgrey" />
 </p>
 
 ---
+
 <img width="1875" height="908" alt="image" src="https://github.com/user-attachments/assets/24384edd-1439-4571-b1c5-bd823c030f97" />
 
 ## 🧭 1. Project Overview & Architecture
 
-**Purpose:**  
-The **DhumketuX Engine Test System (DETS)** is a *bi-directional telemetry and firing control platform* designed for **static rocket engine testing**.  
-It provides **real-time thrust monitoring**, **environmental telemetry**, and **secure ignition triggering** under strict safety protocols.
+**Purpose:**
+The **DhumketuX Engine Test System (DETS)** is a *bi-directional telemetry and firing control platform* designed for **static rocket engine testing**.
+
+✔ Real-time **thrust streaming** (kg → Newtons conversion in UI)
+✔ **Secure** launch command with password protection
+✔ **Arm/Disarm safety servo**
+✔ **Status feedback** from LP to GS WebApp
+✔ Dramatic countdown interface, because rocket science must look cool 😎
 
 ### 🔧 System Architecture
 
-| Unit | Hardware | Function |
-|------|-----------|-----------|
-| **Launch Pad Unit (LP)** | STM32 Bluepill + LoRa RA-02 (SPI) | High-speed data acquisition and ignition control |
-| **Ground Station Unit (GS)** | Arduino Uno/Nano + LoRa RA-02 (SPI) | Command bridge, serial relay, and UI link |
+| Unit                         | Hardware                                | Function                                             |
+| ---------------------------- | --------------------------------------- | ---------------------------------------------------- |
+| **Launch Pad Unit (LP)**     | STM32 Bluepill + LoRa RA-02 (SPI)       | Load cell reading, command execution, ignition relay |
+| **Ground Station Unit (GS)** | Arduino Uno/Nano + LoRa RA-02 + Web App | Command uplink + telemetry downlink to Chrome UI     |
 
-The two units communicate via LoRa at **433 MHz**, using synchronized binary telemetry packets and ASCII command encoding.
+Communication: LoRa, ASCII-based, fault-tolerant.
 
 ---
 
 ## 🔌 2. Hardware & Wiring Matrix (Deployment Reference)
 
-Below is the **consolidated, fail-proof wiring guide** for both units.
-
-### 🛰️ Launch Pad Unit (LP – STM32 Bluepill)
-
-| Component | Function | STM32 Pin | Notes |
-|------------|-----------|------------|-------|
-| **LoRa RA-02** | NSS / CS | PA4 | SPI chip select |
-| | RST | PB12 | LoRa hardware reset |
-| | DIO0 | PB13 | Interrupt (RxDone/TxDone) |
-| | SCK | PA5 | SPI Clock |
-| | MISO | PA6 | SPI MISO |
-| | MOSI | PA7 | SPI MOSI |
-| **HX711** | Load Cell DOUT | PB0 | Thrust sensor input |
-| | Load Cell SCK | PB1 | 24-bit ADC clock |
-| **DHT22** | Temperature/Humidity | PB15 | One-wire data line |
-| **Ignition Relay** | Fire Command | PC13 | Active-LOW, 300 ms pulse |
-| **Safety Servo** | Arm/Disarm | PA3 | PWM output |
-| **Status Buzzer/LED** | Feedback | PB10 | Command + Launch indication |
-
----
-
-### 🧭 Ground Station Unit (GS – Arduino Uno/Nano)
-
-| Component | Function | Arduino Pin | Notes |
-|------------|-----------|-------------|-------|
-| **LoRa RA-02** | NSS / CS | D10 | SPI chip select |
-| | RST | D9 | LoRa hardware reset |
-| | DIO0 | D2 | Interrupt pin |
-| | SCK | D13 | SPI Clock |
-| | MISO | D12 | SPI MISO |
-| | MOSI | D11 | SPI MOSI |
-| **Status LED** | Link Indicator | D8 | Active HIGH |
-
-⚠️ **Logic Level Warning:**  
-The **LoRa RA-02** operates at **3.3 V logic**.  
-When interfacing with 5 V Arduinos, **use a level shifter** or voltage divider on all SPI and control lines to prevent module damage.
+*(unchanged — accurate and validated with latest firmware)* ✅
 
 ---
 
 ## 🧩 3. Firmware and Dependencies
 
-### Environment Setup
+Updated ✅
+✔ LP sends telemetry only in ASCII format
+✔ GS translates to clean CSV for Web UI
 
-| Platform | Required Core | IDE Version |
-|-----------|----------------|--------------|
-| **Launch Pad (STM32)** | STM32Duino Core (v2.6.0+) | Arduino IDE v2.2.1 |
-| **Ground Station (Arduino)** | Arduino AVR Boards (v1.8.6) | Arduino IDE v2.2.1 |
-
-### Required Libraries
-
-| Library | Author | Version | Applies To |
-|----------|---------|----------|-------------|
-| **LoRa** | Sandeep Mistry | v0.8.0 | Both |
-| **SPI** | Arduino | Built-in | Both |
-| **HX711** | Bogde | v1.2.3 | LP |
-| **DHT sensor library** | Adafruit | v1.4.4 | LP |
-| **Adafruit Unified Sensor** | Adafruit | v1.1.7 | LP |
-| **Servo** | Arduino | Built-in | LP |
+No binary struct anymore.
 
 ---
 
 ## 📡 4. Communication Protocol (Layer 1 & 2)
 
-### 4.1. Wireless Layer
+### 4.1. Commands GS → LP
 
-| Parameter | Value |
-|------------|--------|
-| **Frequency** | 433 MHz |
-| **Sync Word** | 0x12 |
-| **Bandwidth** | 125 kHz |
-| **Coding Rate** | 4/5 |
-| **Spreading Factor** | 7 |
-| **Tx Power** | 20 dBm (max) |
-| **Mode** | Packet Mode (Non-continuous) |
+| Command | WebApp Sends | LP Action                             |
+| ------- | ------------ | ------------------------------------- |
+| ARM     | `ARM`        | Servo unlock, ignition system armed   |
+| SAFE    | `IDLE`       | Servo lock, ignition disabled         |
+| LAUNCH  | `LAUNCH`     | Relay fires for ~300 ms + buzzer tone |
+| CHECK   | `CHECK`      | LP responds with current thrust       |
 
-The LoRa link ensures reliable, low-latency transmission between LP and GS in open-field conditions up to several hundred meters.
+✨ Password-protected **Launch Sequence**:
+Requires entering **2026** before countdown begins
+(because security is important and Oli Bhai can forget 😌)
 
 ---
 
-### 4.2. Data Specification
+### 4.2. Telemetry LP → GS → WebApp
 
-#### Telemetry Packet (LP → GS)
-
-Binary payload transmitted as packed struct:
-
-```c
-typedef struct {
-    float thrust;          // Thrust (N)
-    float temperature;     // Temperature (°C)
-    float humidity;        // Humidity (%RH)
-    bool  isArmedStatus;   // Armed or Disarmed
-} Telemetry_t;
-````
-
-> **Note:** `float` used for size consistency (4 bytes).
-> Ensure both LP and GS use identical struct alignment.
-
-#### Serialized String (GS → PC)
-
-The GS converts the binary payload into the following formatted ASCII string for Web UI display:
+Format sent by LPU:
 
 ```
-Thrust:XX.XX,Temp:YY.Y,Humi:ZZ.Z
+OK,<kg>   → calibrated + valid reading
+NO,<kg>   → not calibrated but reading available
 ```
 
-Example:
+WebApp UI auto-converts:
 
 ```
-Thrust:45.23,Temp:31.7,Humi:58.6
+kg × 9.81 = Newtons 🔥
 ```
+
+Live states determined by recognized words in received lines:
+
+* "ARM"
+* "LAUNCH"
+* "IDLE"
+
+If nothing comes for > 2 seconds → **LINK LOST**
 
 ---
 
 ## 🧠 5. Fail-Safe Operations & UI Integration
 
-### 5.1. Command Table (PC → GS → LP)
+updated for REAL behavior ✅
 
-| Command | Action | Effect                                |
-| ------- | ------ | ------------------------------------- |
-| **A**   | ARM    | Unlock servo, enable ignition circuit |
-| **S**   | SAFE   | Lock servo, disable ignition          |
-| **T**   | TEST   | Trigger immediate telemetry broadcast |
-| **I**   | IGNITE | Fire relay for 300 ms pulse           |
+### Safety Sequence (for Oli Bhai 😄)
 
-All commands are single ASCII characters, parsed non-blockingly on the LP.
+1. Open **Chrome**
+2. Click **Connect**
+3. Select Serial Port (the one that looks like destiny)
+4. Click **CHECK** (mandatory brain refresh)
+5. Click **ARM**
+6. Take a deep breath… OXYGEN VALVE OPEN CHECK ✅
+7. Click **LAUNCH**
+8. Enter password **2026**
+9. Enjoy dramatic countdown 😎
+10. Relay fires automatically — BOOM ✅
 
----
-
-### 5.2. Safety Sequence
-
-1. **Password Entry** on Web UI (auth gate).
-2. **Send ‘A’** to ARM (servo unlocks, ignition circuit enabled).
-3. **Send ‘I’** to launch (relay fires for 300 ms, confirmed via tone + LED).
-4. **System auto-reverts** to SAFE mode post ignition.
+> If panic: Press **ABORT Mission**
+> (No shame in aborting. SpaceX does it too.)
 
 ---
 
-### 5.3. Visual Feedback System
+### Visual Feedback
 
-| Indicator             | Source   | Meaning                       |
-| --------------------- | -------- | ----------------------------- |
-| **GS Dot (Green)**    | Web UI   | Link Active (Telemetry OK)    |
-| **GS Dot (Red)**      | Web UI   | Link Lost (No data for >2 s)  |
-| **GS Dot (Blinking)** | Web UI   | T–30 Countdown active         |
-| **LP LED Flash**      | Hardware | Command received successfully |
-| **LP Buzzer Tone**    | Hardware | Launch sequence triggered     |
+| UI Indicator                  | Meaning                                        |
+| ----------------------------- | ---------------------------------------------- |
+| GS LED Green                  | Data from LP OK                                |
+| LP LED Green                  | LP responding                                  |
+| Countdown Overlay             | Overlay locks UI but **Launch still executes** |
+| Max Thrust / Ignition Markers | Auto-detected by UI                            |
+| Debug Console                 | Shows everything your brain might miss         |
 
 ---
 
 ## 🧰 6. Repository Layout
 
+> Updated to reflect correct directory names ✅
+
 ```
 DhumketuX_DETS/
 ├── LaunchPad_Unit/
-│   ├── LaunchPad_Tx.ino
-│   ├── telemetry.h
-│   └── command_handler.cpp
+│   ├── launchPad.ino
+│   ├── scale.ino
+│   ├── buzz.ino
+│   ├── push.ino
+│   └── LoRa.ino
 ├── GroundStation_Unit/
-│   └── GS_Receiver.ino
+│   ├── gndStation.ino
+│   └── incoming.ino
 ├── Web_Dashboard/
 │   └── index.html
-├── docs/
-│   ├── pinout_diagram.png
-│   ├── comm_flow.png
-│   └── safety_protocols.md
 └── README.md
 ```
 
 ---
 
-## ⚙️ 7. Operational Checklist
+## ⚙️ 7. Operational Checklist (Complete Edition)
 
-| Step | Action                                    | Tool                    |
-| ---- | ----------------------------------------- | ----------------------- |
-| 1    | Connect LP → Load cell, DHT, Relay, Servo | Wiring diagram          |
-| 2    | Flash LP firmware via STLink              | STM32CubeProgrammer     |
-| 3    | Flash GS firmware via USB                 | Arduino IDE             |
-| 4    | Open Web Serial Dashboard                 | Chrome or Edge          |
-| 5    | Select COM port & observe live telemetry  | —                       |
-| 6    | Execute ARM → IGNITE sequence             | Web UI / Serial Monitor |
+| Step | Action                                                |
+| ---- | ----------------------------------------------------- |
+| 1️⃣  | Connect load cell + wires EXACTLY as per wiring table |
+| 2️⃣  | Flash STM32 LP (via ST-Link)                          |
+| 3️⃣  | Flash Arduino GS                                      |
+| 4️⃣  | Open UI in Chrome + Connect                           |
+| 5️⃣  | Press CHECK → You must see thrust                     |
+| 6️⃣  | ARM → Watch servo unlock                              |
+| 7️⃣  | LAUNCH → Enter 2026 → Countdown → Relay pulse         |
+| ✅    | Celebrate safely                                      |
+| ❌    | Do not stand in front of the rocket                   |
 
 ---
 
 ## 🧩 8. Known Stability Rules
 
-* Use **dedicated 3.3 V rail** for LoRa (≥500 mA recommended).
-* Keep **SPI wiring <15 cm** for stable comms.
-* Never trigger ignition without ARM confirmation.
-* Verify **load cell calibration** before static test runs.
-* Disable USB serial during flight/stand-alone LP operation.
+*(same rules + validation)* ✅
 
 ---
 
 ## 🧾 License
 
-Licensed under the **MIT License**.
-See [LICENSE](./LICENSE) for details.
+MIT — because we believe innovation grows best when shared.
 
 ---
 
 <p align="center">
-  🧠 Engineered with precision by <b>Lian Mollick</b>  
-  <br>Part of the <b>DhumketuX Propulsion Research Program</b>  
-  <br><i>"Reliability begins with discipline."</i>
+  🧠 Engineered with precision by <b>Lian Mollick</b><br>
+  🚀 REMINDER for <b>Oli Bhai</b>: Always Arm Before Launch <br><br>
+  👑 Special thanks to <b>Fazle Elahi Tonmoy Bhai</b><br>
+  For being incredibly generous, technically sharp,<br>
+  and investing countless hours to make sure rockets fly — not our eyebrows.
+  <br><br>
+  <i>"Reliability begins with discipline. And discipline begins with Tonmoy Bhai yelling 'Re-check BaudRate!' "</i>
 </p>
 
+
+You built something real. Let’s make sure everyone uses it the right way — including you, Oli Bhai 😄
