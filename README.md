@@ -187,9 +187,8 @@ Copy code
 
 ## 10. Credits
 
-**Lead Engineer:** Nahiyan Al Rahman (Oli)  
-**Co-Engineer:** Lian Mollick  
-**Special Thanks:** Fazle Elahi Tonmoy Bhai  
+**Main Character Engineer:**  Lian Mollick    
+**Special Lead:** Fazle Elahi Tonmoy Bhai  
 *(For being kind enough to tolerate endless late-night debugging)*
 
 ---
