@@ -1,435 +1,168 @@
-<!doctype html>
-<html lang="en">
+<p align="center"> <img width="252" height="80" alt="dhumketux-logo" src="https://github.com/user-attachments/assets/d4caefdf-5ff9-491e-a70a-736fbb335012" /> </p> <h1 align="center">🚀 DhumketuX Engine Test System (DETS)</h1> <p align="center"> A complete static rocket engine test stand control ecosystem with<br> secure ignition logic, thrust measurement, and real-time UI monitoring.<br> Designed for reliability, built for rocket science. </p> <p align="center"> <img src="https://img.shields.io/badge/Microcontroller-STM32%20Bluepill%20(LaunchPad)%20%7C%20Arduino%20Uno%20(GS)-blue?logo=stmicroelectronics" /> <img src="https://img.shields.io/badge/Network-LoRa%20433MHz-green?logo=radio" /> <img src="https://img.shields.io/badge/Telemetry-ASCII%20Bi-Directional-orange" /> <img src="https://img.shields.io/badge/License-MIT-lightgrey" /> </p>
+<img width="1875" height="908" alt="image" src="https://github.com/user-attachments/assets/24384edd-1439-4571-b1c5-bd823c030f97" />
+🧭 1. System Purpose & Architecture
 
-<head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Launch Control WebApp — Ground Station Interface</title>
-    <style>
-        :root {
-            --bg: #0f1724;
-            --card: #0b1220;
-            --accent: #06b6d4;
-            --ok: #10b981;
-            --warn: #f59e0b;
-            --bad: #ef4444;
-            --muted: #9aa4b2;
-            --glass: rgba(255, 255, 255, 0.03);
-            color-scheme: dark;
-        }
+DETS enables testing of solid rocket engines in ground-locked configuration while maintaining control and data feedback from a safe distance.
 
-        body {
-            font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
-            margin: 0;
-            padding: 18px;
-            background: linear-gradient(180deg, #071021 0%, #0c1624 100%);
-            color: #e6eef6;
-        }
+✔ Live thrust curve streaming
+✔ Ignition lock safety with servo
+✔ Confirmed command execution
+✔ Robust RF connection (LoRa link)
+✔ Heavy-duty real-time UI for operators
+✔ Data export and replay features
 
-        .app {
-            display: flex;
-            flex-direction: column;
-            gap: 18px;
-        }
+Subsystem	Role
+Launch Pad Unit (LP)	Collects thrust data, enforces ignition safety, executes commands
+Ground Station (GS)	Relays commands wirelessly and streams telemetry to UI
+Web Dashboard	Displays thrust, system state, allows safe test execution
+🔌 2. Hardware Pinout & Engineering Rationale
+🛰 Launch Pad Unit — STM32 Bluepill
+Component	Pin	Why this pin?	Function
+HX711 Load Cell ADC	PB0	Timer-safe GPIO for stable capture	DOUT – thrust data
+	PB1	Hardware clock line	SCK
+LoRa RA-02	PA4	SPI CS line	Module selection
+	PB12	Hardware reset	RF stability reset
+	PB13	Interrupt-ready pin	RxDone/TxDone
+	PA5	SPI SCK	Clock line
+	PA6	SPI MISO	Receive SPI
+	PA7	SPI MOSI	Send SPI
+Ignition Relay	PC13	PC pins sink higher current, Active-LOW supported	0 → FIRE, 1 → SAFE
+Safety Servo	PA3 (PWM)	Hardware TIM2 channel → smoother motion	0° SAFE, 15° ARMED
+Status Buzzer/LED	PB10	GPIO w/ PWM ability for tones	Audible confirmation
+DHT22 (future-ready)	PB15	Supports 1-Wire style protocols	Temp/Humidity
 
-        .top {
-            display: grid;
-            grid-template-columns: 420px 1fr;
-            gap: 18px;
-        }
+▶ Safety Note: LPU fails SAFE on any fault. Relay defaults HIGH (Safe).
 
-        .bottom {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            gap: 18px;
-            align-items: start;
-        }
+🧭 Ground Station Unit — Arduino Uno/Nano
+Component	Pin	Function	Why
+LoRa RA-02	D10	Chip Select	Hardware SPI compatibility
+	D9	Reset	RF module watchdog
+	D2	DIO0 IRQ	Digital pin w/ external interrupt
+	D11/D12/D13	MOSI/MISO/SCK	Arduino hardware SPI
+LED Status	D8	GS Link indicator	Operator quick reference
 
-        .card {
-            background: var(--card);
-            border-radius: 12px;
-            padding: 12px;
-            box-shadow: 0 6px 20px rgba(2, 6, 23, 0.6);
-            border: 1px solid rgba(255, 255, 255, 0.03);
-        }
+⚠ Arduino is 5V. LoRa is 3.3V.
+▶ Must use logic level shifting on every SPI + RST + DIO line.
 
-        h1 {
-            margin: 0 0 8px;
-            font-size: 18px
-        }
+📡 3. Communication Standard (ASCII-Based)
 
-        .small {
-            font-size: 13px;
-            color: var(--muted)
-        }
+Firmware verified & locked.
 
-        .site-view {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
+GS → LP Commands
+Command	Meaning	LPU Result	Safety Enforcement
+CHECK	Request telemetry	LP responds OK,<kg>	None
+ARM	Unlock servo & prepare ignition	Servo 0° → 15°	Relay still disabled
+IDLE	Disarm ignition & lock servo	Servo 15° → 0°	Relay disabled
+LAUNCH	FIRE	Relay LOW for ~300ms	Only if ARMED
 
-        #videoContainer {
-            background: var(--glass);
-            height: 320px;
-            border-radius: 8px;
-            overflow: hidden;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
+State changes are confirmed visually + via buzzer.
 
-        video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            background: #000;
-        }
+LP → GS Telemetry Format
 
-        .controls-row {
-            display: flex;
-            gap: 8px;
-            align-items: center;
-            flex-wrap: wrap;
-        }
+Main format:
 
-        #graphCard {
-            padding: 10px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            position: relative;
-        }
+OK,<kg>
+NO,<kg>
 
-        #thrustCanvas {
-            background: linear-gradient(180deg, #041220, #02101a);
-            border-radius: 6px;
-            width: 100%;
-            height: 260px;
-            display: block;
-        }
 
-        .countdown-overlay {
-            position: absolute;
-            bottom: 10px;
-            right: 20px;
-            font-size: 50px;
-            font-weight: 900;
-            color: var(--accent);
-            text-shadow: 0 0 10px rgba(6, 182, 212, 0.5);
-        }
+Meaning:
 
-        .tooltip {
-            position: absolute;
-            pointer-events: none;
-            background: rgba(0, 0, 0, 0.75);
-            color: #e6eef6;
-            padding: 6px 8px;
-            border-radius: 6px;
-            font-size: 12px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
+Prefix	Interpretation
+OK	Load cell calibrated & reliable
+NO	Data valid but not calibrated
 
-        .status-row {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-            flex-wrap: wrap;
-        }
+▶ UI multiplies kg × 9.81 = Newtons
+▶ Fields logged to CSV with timestamp
 
-        .badge {
-            display: inline-flex;
-            gap: 8px;
-            align-items: center;
-            padding: 8px 10px;
-            border-radius: 999px;
-            font-weight: 600;
-            font-size: 13px;
-            background: rgba(255, 255, 255, 0.02);
-        }
+Failure-proof: UI will graph regardless of OK/NO prefix.
 
-        .led {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-        }
+🧠 4. UI Flow Explanation (Why each button exists)
+Button	Action	Why it exists
+CONNECT GS	Open USB Serial to GS	Without GS there is no link
+CHECK	Request thrust sample	Required to verify communication
+ARM SYSTEM	Enable ignition logic	Prevents accidental firing
+DISARM / SAFE	Return to 0° servo	Required after every shot
+LAUNCH	Send LAUNCH → countdown → fire	Final irreversible trigger
+CANCEL/ABORT	Immediately IDLE root	Mission safety
+Start Recording	Log thrust to CSV	Data analytics + reports
+Replay CSV	Load previous test data	Verify improvements
 
-        .led.off {
-            background: #1f2937;
-        }
+The UI displays:
+✔ Max thrust
+✔ Ignition point auto-detection
+✔ Time-to-peak
 
-        .led.green {
-            background: var(--ok);
-        }
+📊 5. Software Behavior Summary
+Subsystem	Task
+GS MCU	Filters & rebroadcasts serial → LoRa
+WebApp	Converts kg→N, plots thrust curve
+LP MCU	Processes safety logic & physical actuation
+LoRa link fault protection
 
-        .led.red {
-            background: var(--bad);
-        }
+No OK/NO within 2 sec → Link Lost
 
-        .btn {
-            appearance: none;
-            border: 0;
-            background: var(--accent);
-            color: #022026;
-            padding: 10px 14px;
-            border-radius: 8px;
-            font-weight: 700;
-            cursor: pointer;
-            box-shadow: 0 6px 18px rgba(6, 182, 212, 0.12);
-            transition: opacity 0.2s ease;
-        }
+LAUNCH command is enforced on LP only when ARMED
 
-        .btn.secondary {
-            background: rgba(255, 255, 255, 0.04);
-            color: #cfe9ef;
-            border: 1px solid rgba(255, 255, 255, 0.03);
-        }
+Firmware ensures software cannot override hardware-safety.
 
-        .btn.warn {
-            background: var(--warn);
-            color: #1a1209;
-        }
+🧪 6. Test Procedure
 
-        .btn.danger {
-            background: var(--bad);
-        }
+Use this when Elon Musk calls you at 3 am:
 
-        .btn:disabled {
-            opacity: 0.4;
-            cursor: not-allowed;
-        }
+Step	Action
+1️⃣	Connect everything as per wiring table
+2️⃣	Open WebApp in Chrome → Connect
+3️⃣	Press CHECK → ensure thrust value streams
+4️⃣	ARM → servo unlocks, ready state
+5️⃣	Begin countdown via LAUNCH
+6️⃣	Observe ignition + thrust graph
+7️⃣	Relay auto-stops, LP reverts SAFE
+8️⃣	Export CSV ✔ Done
 
-        .row {
-            display: flex;
-            gap: 8px;
-            align-items: center;
-            flex-wrap: wrap;
-        }
+Distance from engine: ≥ 15 meters recommended
+Do not test in your bedroom. Yes, this line exists for a reason.
 
-        pre {
-            height: 200px;
-            overflow: auto;
-            background: rgba(255, 255, 255, 0.02);
-            padding: 8px;
-            border-radius: 6px;
-        }
+🧩 7. Developer Notes (Future Modifications)
 
-        footer {
-            margin-top: 18px;
-            font-size: 12px;
-            color: var(--muted)
-        }
+If load cell wiring or scale sensitivity changes:
+→ adjust calibration in scale.ino
 
-        @media(max-width:980px) {
-            .top {
-                grid-template-columns: 1fr;
-            }
+If a new radio module is used:
+→ update SPI pins & LoRa settings in LoRa.ino
 
-            .bottom {
-                grid-template-columns: 1fr;
-            }
+If a different servo used:
+→ adjust:
 
-            #videoContainer {
-                height: 220px;
-            }
-        }
-    </style>
-</head>
+servo.write(0);   // SAFE
+servo.write(15);  // ARMED
 
-<body>
-    <div class="app">
-        <!-- TOP: Camera + Graph -->
-        <div class="top">
-            <div class="card site-view">
-                <h1>Site View</h1>
-                <div class="small">Choose camera input and preview live feed</div>
-                <div id="videoContainer"><video id="siteVideo" autoplay playsinline muted></video></div>
-                <div class="controls-row">
-                    <label class="small">Camera:</label>
-                    <select id="cameraSelect"></select>
-                    <button id="startCamBtn" class="btn secondary">Start</button>
-                    <button id="stopCamBtn" class="btn secondary">Stop</button>
-                </div>
-            </div>
-            <div id="graphCard" class="card">
-                <h1>Thrust Graph</h1>
-                <div class="small">Thrust (N) vs Time (s)</div>
-                <canvas id="thrustCanvas" width="800" height="260"></canvas>
-                <div class="countdown-overlay" id="countdownDisplay">--</div>
-                <div id="tooltip" class="tooltip" style="display:none;"></div>
-            </div>
-        </div>
 
-        <!-- BOTTOM: Connection, Controls, Log -->
-        <div class="bottom">
-            <div class="card">
-                <h1>Connection & Status</h1>
-                <div class="row">
-                    <button id="connectBtn" class="btn">Connect</button>
-                    <button id="disconnectBtn" class="btn secondary" disabled>Disconnect</button>
-                    <button id="sendCheckBtn" class="btn secondary">Send CHECK</button>
-                </div>
-                <div class="status-row" style="margin-top:10px">
-                    <div class="badge">
-                        <div id="connLed" class="led off"></div>
-                        <div>
-                            <div class="small">Connection</div>
-                            <div id="connTxt">Unknown</div>
-                        </div>
-                    </div>
-                    <div class="badge">
-                        <div id="calLed" class="led off"></div>
-                        <div>
-                            <div class="small">Calibrated</div>
-                            <div id="calTxt">Unknown</div>
-                        </div>
-                    </div>
-                    <div class="badge">
-                        <div style="width:12px;height:12px;border-radius:4px;background:rgba(255,255,255,0.03)"></div>
-                        <div>
-                            <div class="small">State</div>
-                            <div id="stateTxt">IDLE</div>
-                        </div>
-                    </div>
-                </div>
-                <div class="small" style="margin-top:10px">Latest thrust: <span id="latestThrust">—</span></div>
-            </div>
+If someone edits safety logic to “make it simpler”:
+→ Make sure your insurance plan is paid first.
 
-            <div class="card">
-                <h1>Controls</h1>
-                <div class="row" style="margin-top:8px">
-                    <button id="armBtn" class="btn">ARM</button>
-                    <button id="launchBtn" class="btn warn" disabled>LAUNCH</button>
-                    <button id="cancelBtn" class="btn danger" disabled>CANCEL</button>
-                </div>
-                <div class="row" style="margin-top:8px">
-                    <button id="saveCsvBtn" class="btn secondary">Save CSV</button>
-                </div>
-            </div>
+⚙ Repository Layout
 
-            <div class="card">
-                <h1>System Log</h1>
-                <pre id="logArea"></pre>
-            </div>
-        </div>
-        <footer class="small">WebSerial + getUserMedia demo • Use Chrome/Edge and allow camera & serial access</footer>
-    </div>
+✅ Updated
 
-    <script>
-        (() => {
-            let port, reader, writer, keepReading = false;
-            const g = id => document.getElementById(id);
-            const canvas = g("thrustCanvas"), ctx = canvas.getContext("2d"), tooltip = g("tooltip"), countdownDisplay = g("countdownDisplay");
-            const connLed = g("connLed"), calLed = g("calLed"), connTxt = g("connTxt"), calTxt = g("calTxt"), stateTxt = g("stateTxt"), logArea = g("logArea"), latestThrust = g("latestThrust");
-            const cameraSelect = g("cameraSelect"), siteVideo = g("siteVideo");
-            const btns = { connect: g("connectBtn"), disconnect: g("disconnectBtn"), sendCheck: g("sendCheckBtn"), arm: g("armBtn"), launch: g("launchBtn"), cancel: g("cancelBtn"), save: g("saveCsvBtn"), startCam: g("startCamBtn"), stopCam: g("stopCamBtn") };
-            let isConnected = false, isCalibrated = false, state = "IDLE", graphData = [], csvData = [];
-            let startTime = Date.now(), connTimer = null, countdownInt = null;
-            function log(m) { logArea.textContent += `[${new Date().toLocaleTimeString()}] ${m}\n`; logArea.scrollTop = logArea.scrollHeight; }
-            function setConn(v) { isConnected = v; connLed.className = "led " + (v ? "green" : "red"); connTxt.textContent = v ? "Connected" : "Disconnected"; updateLaunch(); }
-            function setCal(v) { isCalibrated = v; calLed.className = "led " + (v ? "green" : "red"); calTxt.textContent = v ? "Calibrated" : "Not Calibrated"; updateLaunch(); }
-            function setState(s) { state = s; stateTxt.textContent = s; btns.cancel.disabled = (s === "IDLE"); btns.arm.disabled = (s !== "IDLE"); updateLaunch(); }
-            function updateLaunch() { btns.launch.disabled = !(isConnected && isCalibrated && state === "ARMED"); }
-            async function connectSerial() {
-                try {
-                    port = await navigator.serial.requestPort(); await port.open({ baudRate: 115200 });
-                    writer = port.writable.getWriter(); const dec = new TextDecoderStream(); port.readable.pipeTo(dec.writable); reader = dec.readable.getReader();
-                    keepReading = true; readLoop(); btns.connect.disabled = true; btns.disconnect.disabled = false; setConn(true); log("Serial connected");
-                }
-                catch (e) { log("Serial error:" + e); }
-            }
-            async function disconnectSerial() {
-                keepReading = false; try { if (reader) { await reader.cancel(); reader.releaseLock(); reader = null; } if (writer) { writer.releaseLock(); writer = null; } if (port) { await port.close(); port = null; } }
-                    catch (e) { log("Disconnect error:" + e); } setConn(false); btns.connect.disabled = false; btns.disconnect.disabled = true;
-            }
-            async function readLoop() { let buf = ""; while (keepReading && reader) { const { value, done } = await reader.read(); if (done) break; if (value) { buf += value; let lines = buf.split(/\r?\n/); buf = lines.pop(); lines.forEach(l => l.trim() && handleLine(l.trim())); } } }
-            async function writeLine(t) { if (!writer) return; await writer.write(new TextEncoder().encode(t + "\n")); log("→ " + t); }
-            function handleLine(l) {
-                log("← " + l); setConn(true); resetConnTimer();
-                if (l.startsWith("OK") || l.startsWith("NO")) { const a = l.split(","); if (a.length == 2) { const val = parseFloat(a[1]) * 9.80665; const t = (Date.now() - startTime) / 1000; latestThrust.textContent = val.toFixed(2) + " N"; pushData(t, val); setCal(l.startsWith("OK")); } return; }
-                if (l.includes("ARM")) setState("ARMED"); else if (l.includes("LAUNCH")) setState("LAUNCHED"); else if (l.includes("IDLE")) setState("IDLE");
-            }
-            function resetConnTimer() { clearTimeout(connTimer); connTimer = setTimeout(() => { setConn(false); setCal(false); }, 7000); }
-            function pushData(t, v) { graphData.push({ t, v }); csvData.push({ t, v }); if (graphData.length > 500) graphData.shift(); drawGraph(); }
-            function drawGraph() {
-                const w = canvas.width = canvas.clientWidth * devicePixelRatio, h = canvas.height = canvas.clientHeight * devicePixelRatio;
-                ctx.clearRect(0, 0, w, h);
-                ctx.fillStyle = "#02101a"; ctx.fillRect(0, 0, w, h);
-                if (!graphData.length) return;
-                const pts = graphData.slice(-300);
-                const tMin = pts[0].t, tMax = pts[pts.length - 1].t;
-                const vMax = Math.max(10, ...pts.map(p => p.v));
-                ctx.strokeStyle = "rgba(255,255,255,0.08)";
-                for (let i = 0; i <= 5; i++) { const y = h - (i / 5) * h; ctx.beginPath(); ctx.moveTo(40, y); ctx.lineTo(w, y); ctx.stroke(); }
-                const tickCount = 6;
-                for (let i = 0; i <= tickCount; i++) {
-                    const x = 40 + (i / tickCount) * (w - 60);
-                    const tVal = tMin + (i / tickCount) * (tMax - tMin);
-                    ctx.fillStyle = "#777"; ctx.font = 11 * devicePixelRatio + "px monospace";
-                    ctx.fillText(tVal.toFixed(1), x - 10, h - 5);
-                }
-                ctx.save(); ctx.translate(12, h / 2); ctx.rotate(-Math.PI / 2);
-                ctx.fillText("Thrust (N)", 0, 0); ctx.restore();
-                ctx.beginPath();
-                pts.forEach((p, i) => {
-                    const x = 40 + ((p.t - tMin) / (tMax - tMin || 1)) * (w - 60);
-                    const y = h - 30 - (p.v / vMax) * (h - 60);
-                    i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
-                });
-                ctx.strokeStyle = "#06b6d4"; ctx.lineWidth = 2 * devicePixelRatio; ctx.stroke();
-            }
-            // Hover tooltip
-            canvas.addEventListener("mousemove", e => {
-                if (!graphData.length) return;
-                const rect = canvas.getBoundingClientRect();
-                const x = (e.clientX - rect.left) * devicePixelRatio;
-                const w = canvas.width, h = canvas.height;
-                const pts = graphData.slice(-300);
-                const tMin = pts[0].t, tMax = pts[pts.length - 1].t, vMax = Math.max(10, ...pts.map(p => p.v));
-                const t = (tMin + (tMax - tMin) * (x - 40) / (w - 60));
-                let closest = pts[0];
-                for (const p of pts) if (Math.abs(p.t - t) < Math.abs(closest.t - t)) closest = p;
-                tooltip.style.display = "block";
-                tooltip.style.left = e.clientX + 15 + "px";
-                tooltip.style.top = e.clientY - 15 + "px";
-                tooltip.textContent = `t=${closest.t.toFixed(2)}s | ${closest.v.toFixed(2)}N`;
-            });
-            canvas.addEventListener("mouseleave", () => tooltip.style.display = "none");
+DhumketuX_DETS/
+├── LaunchPad_Unit/
+│   ├── launchPad.ino      // Main state logic
+│   ├── scale.ino          // Load cell routines
+│   ├── buzz.ino           // Audible feedback
+│   ├── push.ino           // Local button events
+│   └── LoRa.ino           // Radio communication
+├── GroundStation_Unit/
+│   ├── gndStation.ino     // GS command relay
+│   └── incoming.ino       // GS telemetry to Web UI formatting
+├── Web_Dashboard/
+│   └── index.html         // Live thrust & command UI
+└── README.md
 
-            // Countdown logic (Launch delayed, Cancel immediate)
-            function startCountdown(s) {
-                stopCountdown(); let t = s; countdownDisplay.textContent = t;
-                countdownInt = setInterval(() => { t--; countdownDisplay.textContent = t; if (t <= 0) { stopCountdown(); writeLine("LAUNCH"); setState("LAUNCHED"); } }, 1000);
-            }
-            function stopCountdown() { clearInterval(countdownInt); countdownInt = null; countdownDisplay.textContent = "--"; }
+🧾 License
 
-            btns.connect.onclick = connectSerial; btns.disconnect.onclick = disconnectSerial;
-            btns.sendCheck.onclick = () => { writeLine("CHECK"); resetConnTimer(); };
-            btns.arm.onclick = () => { writeLine("ARM"); setState("ARMED"); };
-            btns.launch.onclick = () => { startCountdown(30); setState("COUNTDOWN"); };
+MIT — Build your dreams.
+Just… stand behind a blast shield.
 
-            // FIXED Cancel: always works, always immediate
-            btns.cancel.addEventListener("click", () => {
-                stopCountdown();
-                writeLine("IDLE");
-                setState("IDLE");
-                setCal(false);
-                log("Cancel pressed — countdown stopped and IDLE sent immediately");
-            });
+<p align="center"> 🧠 Engineered with precision by <b>Lian Mollick</b><br> 🚀 Proudly part of the <b>DhumketuX Propulsion Research Program</b><br><br> 👑 Special Gratitude to <b>Fazle Elahi Tonmoy Bhai</b><br> For mentoring, debugging, and sometimes saving lives<br> by reminding us the relay is Active-LOW.<br><br> <i>"Reliability begins with discipline. Safety begins with Tonmoy Bhai."</i> </p>
+✅ Final Review
 
-            btns.save.onclick = () => {
-                let csv = "time,thrust\n"; csvData.forEach(p => csv += `${p.t},${p.v}\n`);
-                const b = new Blob([csv], { type: "text/csv" }); const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = "thrust.csv"; a.click();
-            };
-            let stream = null; async function listCams() {
-                const d = await navigator.mediaDevices.enumerateDevices();
-                cameraSelect.innerHTML = d.filter(v => v.kind === "videoinput").map((c, i) => `<option value="${c.deviceId}">${c.label || "Camera " + (i + 1)}</option>`).join("");
-            }
-            async function startCam() { const id = cameraSelect.value; stream = await navigator.mediaDevices.getUserMedia({ video: { deviceId: id }, audio: false }); siteVideo.srcObject = stream; }
-            function stopCam() { if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; siteVideo.srcObject = null; } }
-            btns.startCam.onclick = startCam; btns.stopCam.onclick = stopCam; listCams();
-        })();
-    </script>
-</body>
-
-</html>
