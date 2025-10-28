@@ -158,7 +158,7 @@ Copy code
 
 1️⃣ Power LP + GS  
 2️⃣ Connect browser → GS over Web Serial  
-3️⃣ Confirm live telemetry updates  
+3️⃣ Confirm live telemetry updates and press Calibrate button once to see in log near 0.00 without load.
 4️⃣ Hit **ARM**  
  Servo moves to **15°**  
 5️⃣ Press **Launch**  
