@@ -12,21 +12,21 @@ void incoming() {
 
     else if (incoming == "IDLE") {
       state = IDLE;
-      servo.write(90);         //change the direction if needed==================================
-      digitalWrite(relay, 1);  //hip hip hoorray!
+      servo.write(servo_disram); 
+      digitalWrite(relay, 1);  
       sendStatus();
     }
 
     else if (incoming == "ARM") {
       state = ARMED;
-      servo.write(0);  //change the direction if needed==================================
+      servo.write(servo_arm);  //change the direction if needed==================================
       sendStatus();
     }
 
     else if (incoming == "LAUNCH") {
       state = LAUNCHED;
       digitalWrite(relay, 0);  //hip hip hoorray!
-      timer = millis();
+      idle_timer = timer = millis();
       sendStatus();
     }
   }

@@ -11,6 +11,9 @@ enum launchState {
 
 launchState state = IDLE;
 
+#define servo_arm 17
+#define servo_disram 0
+
 //======for LoRa Connection=======
 #define NSS_PIN PA4
 #define RST_PIN PB12
@@ -41,7 +44,7 @@ Servo servo;
 Adafruit_HX711 hx711(PB0, PB1);
 
 //=========variables for the timer=======
-uint32_t timer;
+uint32_t timer, idle_timer;
 
 
 void setup() {
@@ -60,7 +63,7 @@ void setup() {
   digitalWrite(relay, 1);
   pinMode(button, INPUT);
   servo.attach(servo_pin);
-  servo.write(90);  //change the direction if needed==================================
+  servo.write(servo_disram); 
   hx711.begin();
   Serial.println("Launch Pad Ready!");
 }
@@ -73,13 +76,19 @@ void loop() {
   if (r) {
     Serial.println(r);
     if (r == 1) calibrate_scale();
-    else if (r == 2) while (!push()) check_weight();
+    else if (r == 2)
+      while (!push()) check_weight();
   }
 
   if (state == LAUNCHED) {
     if (millis() - timer > 100) {
       timer = millis();
       sendStatus();
+    }
+    if (millis() - idle_timer > 30000) {
+      state = IDLE;
+      servo.write(servo_disram);         //change the direction if needed==================================
+      digitalWrite(relay, 1);  
     }
   }
 
